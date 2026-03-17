@@ -66,4 +66,12 @@ export class FxController {
       days,
     );
   }
+
+  @Get('debug')
+async debugRates(
+  @Query('from') from: string,
+  @Query('to') to: string,
+) {
+  return await this.fxService.debugRate(from, to);
+}
 }

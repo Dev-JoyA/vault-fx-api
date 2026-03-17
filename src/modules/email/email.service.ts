@@ -172,36 +172,6 @@ export class EmailService {
     }
   }
 
-//   async resendVerificationOtp(userId: string, email: string): Promise<string> {
-//     try {
-//       await this.emailRepository.deleteExpired();
-      
-//       const otp = this.generateOtp();
-//       const expiresAt = new Date();
-//       expiresAt.setMinutes(expiresAt.getMinutes() + (this.configService.get<number>('otp.expiryMinutes') || 10));
-
-//       await this.emailRepository.create(userId, otp, expiresAt);
-
-//       const mailOptions = {
-//         from: this.configService.get<string>('email.from'),
-//         to: email,
-//         subject: '🔄 New Verification Code - Vault FX',
-//         html: getVerificationEmailTemplate(otp, email.split('@')[0]),
-//       };
-
-//       if (this.isDevelopment) {
-//         this.logger.log(`[DEV MODE] Resent verification OTP for ${email}: ${otp}`);
-//       } else {
-//         await this.transporter.sendMail(mailOptions);
-//       }
-
-//       return otp;
-//     } catch (error) {
-//       this.logger.error(`Failed to resend verification email to ${email}: ${(error as Error).message}`, (error as Error).stack);
-//       throw new InternalServerErrorException('Failed to resend verification email. Please try again.');
-//     }
-//   }
-
   async sendWelcomeEmail(email: string, name?: string): Promise<void> {
     try {
       const mailOptions = {
@@ -363,10 +333,8 @@ export class EmailService {
 
   async resendVerificationOtp(userId: string, email: string): Promise<void> {
   try {
-    // Invalidate old OTPs for this user
     await this.emailRepository.invalidateUserOtps(userId);
     
-    // Generate new OTP
     const otp = this.generateOtp();
     const expiresAt = new Date();
     expiresAt.setMinutes(
@@ -374,10 +342,8 @@ export class EmailService {
       (this.configService.get<number>('otp.expiryMinutes') || 10)
     );
 
-    // Save new OTP
     await this.emailRepository.create(userId, otp, expiresAt);
 
-    // Send email
     const mailOptions = {
       from: this.configService.get<string>('email.from'),
       to: email,
@@ -397,7 +363,6 @@ export class EmailService {
   }
 }
 
-// Add this helper method to invalidate old OTPs
 async invalidateUserOtps(userId: string): Promise<void> {
   await this.emailRepository.invalidateUserOtps(userId);
 }
