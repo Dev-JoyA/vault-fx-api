@@ -92,8 +92,6 @@ describe('WalletsController', () => {
         amount: -500,
       };
 
-      // This test will fail validation before reaching the service
-      // We're testing that the validation pipe would catch this
       try {
         await controller.transfer(mockRequest as any, invalidDto as any, idempotencyKey);
       } catch (error) {

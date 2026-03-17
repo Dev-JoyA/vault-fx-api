@@ -5,17 +5,16 @@ import { FxRepository } from './fx.repository';
 import { FxRateResponseDto } from './dto/fx-rate.dto';
 
 interface ExchangeRateResponse {
-  base: string;
-  rates: Record<string, number>;
-  date: string;
-  timestamp: number;
+  result: string;          
+  base_code: string;      
+  conversion_rates: Record<string, number>; 
+  time_last_update_utc: string;
 }
 
 @Injectable()
 export class FxService {
   private readonly logger = new Logger(FxService.name);
   private readonly apiUrl: string;
-  private readonly apiKey: string;
   private readonly supportedCurrencies = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'JPY', 'CHF', 'AUD'];
   private cache: Map<string, { rates: Record<string, number>; timestamp: Date }> = new Map();
 
@@ -23,8 +22,7 @@ export class FxService {
     private readonly configService: ConfigService,
     private readonly fxRepository: FxRepository,
   ) {
-    this.apiUrl = this.configService.get<string>('fx.apiUrl') || 'https://api.exchangerate-api.com/v4/latest/';
-    this.apiKey = this.configService.get<string>('fx.apiKey') || '';
+    this.apiUrl = this.configService.get<string>('fx.apiUrl') || `https://v6.exchangerate-api.com/v6/${this.configService.get<string>('fx.apiKey')}/latest/`;
   }
 
   async getRates(baseCurrency: string = 'USD', targetCurrencies?: string[]): Promise<FxRateResponseDto> {
@@ -62,35 +60,58 @@ export class FxService {
     }
   }
 
-async getPairRate(baseCurrency: string, targetCurrency: string): Promise<number> {
+  async getPairRate(baseCurrency: string, targetCurrency: string): Promise<number> {
   if (baseCurrency === targetCurrency) {
     return 1;
   }
+
+  this.logger.log(`Fetching rate for ${baseCurrency}/${targetCurrency}`);
 
   try {
     const cacheKey = `${baseCurrency}_${targetCurrency}`;
     const cached = this.cache.get(cacheKey);
     
     if (cached && this.isCacheValid(cached.timestamp)) {
-      return this.parseRate(cached.rates[targetCurrency]);
+      const rate = this.parseRate(cached.rates[targetCurrency]);
+      this.logger.log(`Cache hit: ${baseCurrency}/${targetCurrency} = ${rate}`);
+      return rate;
     }
 
     const dbRate = await this.fxRepository.findLatestRate(baseCurrency, targetCurrency);
     if (dbRate && this.isDbRateValid(dbRate.timestamp)) {
-      return this.parseRate(dbRate.rate);
+      const rate = this.parseRate(dbRate.rate);
+      this.logger.log(`Database hit: ${baseCurrency}/${targetCurrency} = ${rate}`);
+      return rate;
     }
 
+    this.logger.log(`Fetching from provider: ${baseCurrency}/${targetCurrency}`);
     const rates = await this.fetchRatesFromProvider(baseCurrency, [targetCurrency]);
-    await this.cacheRates(baseCurrency, rates);
     
-    return this.parseRate(rates[targetCurrency]);
+    if (rates && rates[targetCurrency]) {
+      const rate = rates[targetCurrency];
+      await this.cacheRates(baseCurrency, rates);
+      this.logger.log(`Provider rate: ${baseCurrency}/${targetCurrency} = ${rate}`);
+      return rate;
+    }
+
+    throw new Error(`No rate available for ${baseCurrency}/${targetCurrency}`);
   } catch (error) {
-    this.logger.error(`Failed to get pair rate ${baseCurrency}/${targetCurrency}: ${(error as Error).message}`);
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    this.logger.error(`Failed to get rate for ${baseCurrency}/${targetCurrency}: ${errorMessage}`);
     
-    const dbRate = await this.fxRepository.findLatestRate(baseCurrency, targetCurrency);
-    if (dbRate) {
-      this.logger.warn(`Using stale database rate for ${baseCurrency}/${targetCurrency}`);
-      return this.parseRate(dbRate.rate);
+    
+    if (baseCurrency !== 'USD' && targetCurrency !== 'USD') {
+      try {
+        const usdBase = await this.getPairRate('USD', baseCurrency);
+        const usdTarget = await this.getPairRate('USD', targetCurrency);
+        const crossRate = usdTarget / usdBase;
+        this.logger.log(`Cross rate via USD: ${baseCurrency}/${targetCurrency} = ${crossRate}`);
+        return crossRate;
+      } catch (crossError) {
+        const crossErrorMessage = crossError instanceof Error ? crossError.message : 'Unknown error';
+        this.logger.error(`Cross rate fallback failed: ${crossErrorMessage}`);
+      }
     }
     
     throw new HttpException(
@@ -143,33 +164,63 @@ async getPairRate(baseCurrency: string, targetCurrency: string): Promise<number>
     }));
   }
 
-  private async fetchRatesFromProvider(
-    baseCurrency: string,
-    targets: string[],
-  ): Promise<Record<string, number>> {
-    try {
-      const url = `${this.apiUrl}${baseCurrency}`;
-      const response = await axios.get<ExchangeRateResponse>(url, {
-        params: {
-          apikey: this.apiKey,
-          symbols: targets.join(','),
-        },
-        timeout: 5000,
-      });
+ private async fetchRatesFromProvider(
+  baseCurrency: string,
+  targets: string[],
+): Promise<Record<string, number>> {
+  try {
+    const url = `${this.apiUrl}${baseCurrency}`;
+    const response = await axios.get<ExchangeRateResponse>(url, {
+      timeout: 5000,
+    });
 
-      const filteredRates: Record<string, number> = {};
-      targets.forEach(currency => {
-        if (response.data.rates[currency]) {
-          filteredRates[currency] = response.data.rates[currency];
-        }
-      });
+    const filteredRates: Record<string, number> = {};
+    targets.forEach(currency => {
+      if (response.data.conversion_rates[currency]) {
+        filteredRates[currency] = response.data.conversion_rates[currency];
+      }
+    });
 
-      return filteredRates;
-    } catch (error) {
-      this.logger.error(`Provider API error: ${(error as Error).message}`);
-      throw error;
+    return filteredRates;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      this.logger.error(`Provider API error: ${error.message}`, error.stack);
+      if (error.response) {
+        this.logger.error(`Response status: ${error.response.status}`);
+        this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+      }
+    } else if (error instanceof Error) {
+      this.logger.error(`Provider API error: ${error.message}`, error.stack);
+    } else {
+      this.logger.error('Provider API error: Unknown error occurred');
     }
+    throw error;
   }
+}
+
+async debugRate(baseCurrency: string, targetCurrency: string) {
+  console.log(`🔍 Debug: Fetching rate for ${baseCurrency}/${targetCurrency}`);
+  
+  try {
+    const url = `https://api.exchangerate-api.com/v4/latest/${baseCurrency}`;
+    const response = await axios.get(url);
+    const rate = response.data.rates[targetCurrency];
+    
+    console.log(`✅ API Rate: ${rate}`);
+    console.log(`📊 Full response:`, response.data);
+    
+    return {
+      from: baseCurrency,
+      to: targetCurrency,
+      rate,
+      source: 'API',
+      data: response.data
+    };
+  } catch (error: any){
+    console.error(`❌ API Error:`, error.message);
+    return { error: error.message };
+  }
+}
 
   private async cacheRates(baseCurrency: string, rates: Record<string, number>): Promise<void> {
     try {

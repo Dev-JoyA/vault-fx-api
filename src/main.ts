@@ -9,7 +9,6 @@ import * as compression from 'compression';
 import { seedAdmin } from './database/seeders/admin.seeder';
 
 async function bootstrap() {
-  console.log('Bootstrap starting...');
 
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
@@ -18,16 +17,11 @@ async function bootstrap() {
   const port = configService.get<number>('port') ?? 3000;
   const apiPrefix = configService.get<string>('apiPrefix') ?? 'api';
 
-  console.log(`Environment: ${configService.get('nodeEnv')}`);
-  console.log(`Port: ${port}`);
 
-  // ─── Seed admin ────────────────────────────────────────────────────────────
   await seedAdmin(dataSource, configService);
 
-  // ─── Helmet ────────────────────────────────────────────────────────────────
   app.use(helmet());
 
-  // ─── CORS ──────────────────────────────────────────────────────────────────
   const corsOrigins = configService.get<string>('cors.origin');
   const allowedOrigins = corsOrigins
     ? corsOrigins.split(',').map((o: string) => o.trim())
@@ -50,10 +44,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // ─── Compression ───────────────────────────────────────────────────────────
   app.use(compression());
 
-  // ─── Validation ────────────────────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -63,13 +55,11 @@ async function bootstrap() {
     }),
   );
 
-  // ─── Global prefix (must be set before Swagger) ────────────────────────────
   app.setGlobalPrefix(apiPrefix, {
   exclude: [`${apiPrefix}/docs`, `${apiPrefix}/docs-json`],
 });
   app.enableShutdownHooks();
 
-  // ─── Swagger (non-production only) ─────────────────────────────────────────
   if (!isProduction) {
     const config = new DocumentBuilder()
       .setTitle('Vault FX API')
@@ -91,7 +81,6 @@ async function bootstrap() {
     console.log(`Swagger available at: http://localhost:${port}/${apiPrefix}/docs`);
   }
 
-  // ─── Listen ────────────────────────────────────────────────────────────────
   await app.listen(port, '0.0.0.0');
 
   console.log(`✅ Application running on: http://localhost:${port}/${apiPrefix}`);

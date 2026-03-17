@@ -76,7 +76,6 @@ export class AuthService {
   async resendVerificationOtp(email: string): Promise<{ message: string }> {
   const user = await this.usersRepository.findByEmail(email);
   if (!user) {
-    // Return same message for security (don't reveal if email exists)
     return { message: 'If your email is registered, a new OTP has been sent.' };
   }
 

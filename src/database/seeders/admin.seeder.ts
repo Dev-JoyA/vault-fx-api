@@ -8,7 +8,6 @@ export async function seedAdmin(dataSource: DataSource, configService: ConfigSer
   
   const adminEmail = 'admin@vault-fx.com';
   
-  // Check if admin already exists
   const existingAdmin = await userRepository.findOne({ where: { email: adminEmail } });
   
   if (!existingAdmin) {
@@ -27,8 +26,6 @@ export async function seedAdmin(dataSource: DataSource, configService: ConfigSer
     });
     
     await userRepository.save(admin);
-    console.log('✅ Admin user created successfully');
   } else {
-    console.log('✅ Admin user already exists');
   }
 }

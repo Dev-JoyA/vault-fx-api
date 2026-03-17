@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
@@ -29,12 +30,12 @@ export class AuthController {
   async verifyEmail(@Body() verifyOtpDto: VerifyOtpDto) {
     return this.authService.verifyEmail(verifyOtpDto);
   }
-@Post('resend-otp')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 attempts per minute
-  async resendOtp(@Body() email: string) {
-    return await this.authService.resendVerificationOtp(email);
-  }
+  @Post('resend-otp')
+    @HttpCode(HttpStatus.OK)
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
+    async resendOtp(@Body() resendOtpDto: ResendOtpDto) {  
+    return await this.authService.resendVerificationOtp(resendOtpDto.email);
+    }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)

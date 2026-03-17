@@ -47,7 +47,6 @@ describe('WalletsService', () => {
   };
 
   beforeEach(async () => {
-    // Reset everything first, then set up defaults
     jest.resetAllMocks();
 
     mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner);
@@ -274,7 +273,6 @@ describe('WalletsService', () => {
       mockWalletsRepository.findByUserAndCurrency
         .mockResolvedValueOnce(senderWallet)
         .mockResolvedValueOnce(recipientWallet);
-      // Error thrown after balance check passes, during updateBalance
       mockWalletsRepository.updateBalance.mockRejectedValue(new Error('Database error'));
 
       await expect(
