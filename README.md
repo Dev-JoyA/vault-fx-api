@@ -438,12 +438,4 @@ src/
         └── admin.seeder.ts  # ⚠️ UPDATE ADMIN CREDENTIALS HERE
 ```
 
----
-
-## 📄 License
-
-Copyright © 2024 Vault FX. All rights reserved.
-
----
-
 **Built with ❤️ for the Fintech Ecosystem**
