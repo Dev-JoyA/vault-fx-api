@@ -1,4 +1,3 @@
-````markdown
 # Vault FX API
 
 A backend system for an FX trading platform built with NestJS, TypeORM, and PostgreSQL. Users can register, verify their email, manage multi-currency wallets, and trade Naira (NGN) against major world currencies using real-time exchange rates.
@@ -42,6 +41,29 @@ createdb vault_fx
 
 ---
 
+## ⚠️ **Important: Configure Admin Account Before First Run**
+
+The admin account is created automatically when the app starts. **You MUST update the admin credentials before running the application.**
+
+**File:** `src/database/seeders/admin.seeder.ts`
+
+```typescript
+// CHANGE THESE VALUES BEFORE STARTING THE APP
+const adminEmail = 'your-email@example.com';      // ← Set your admin email
+const adminPassword = 'YourSecurePassword123!';   // ← Set your admin password
+```
+
+The account is created with:
+- ✅ `isVerified: true` (no OTP needed)
+- ✅ `role: admin` (full system access)
+- ✅ NGN wallet with 1000 initial balance
+
+> **Security Note**: Change this password immediately after first login in any production environment.
+
+No manual seed command is needed — the seeder runs automatically in `main.ts` on every startup but never duplicates or overwrites an existing admin.
+
+---
+
 ## Environment Configuration
 
 ### Development vs Production
@@ -55,7 +77,6 @@ The app behaves differently depending on `NODE_ENV`:
 | Database `logging` | ✅ SQL queries logged | ❌ Off |
 | Validation error messages | ✅ Full error details | ❌ Hidden |
 | SSL (database) | ❌ Off (`DB_SSL=false`) | ✅ On (`DB_SSL=true`) |
-
 
 To run in **development**:
 ```env
@@ -82,7 +103,6 @@ npm run start:prod
 npm run start:debug
 ```
 
-
 ---
 
 ## Environment Variables
@@ -97,31 +117,6 @@ See `.env.example` in the repository root for all required variables and descrip
 > **Gmail**: Enable 2FA → Security → App Passwords → generate 16-digit password → use as `SMTP_PASS`.
 
 > **FX API**: Sign up at [exchangerate-api.com](https://www.exchangerate-api.com) for a free key.
-
----
-
-## Admin Seeding
-
-An admin account is automatically created when the app starts if it does not already exist.
-No manual seed command is needed — the seeder runs inside `bootstrap()` in `main.ts`.
-
-To use your own admin credentials, update this file before starting the app:
-
-**File:** `src/database/seeders/admin.seeder.ts`
-```typescript
-const adminEmail = 'your-email@example.com';  // change this
-
-const passwordHash = await bcrypt.hash(
-  'YourPassword123!',  // change this
-  ...
-);
-```
-
-The account is created with `isVerified: true` and `role: admin`, so it can log in immediately.
-
-The seeder runs on every startup but never duplicates or overwrites the admin — it is safe in both development and production.
-
-> **Important**: Change the admin password immediately after first login in any production environment.
 
 ---
 
@@ -421,6 +416,34 @@ Any mutating wallet request
 **Security**: JWT access tokens (15m) with UUID refresh tokens (7d) and full rotation on each refresh. Login attempt tracking with brute force lockout after 5 failed attempts in 15 minutes. Rate limiting on all auth endpoints. Helmet.js security headers applied globally. Swagger disabled in production. Passwords hashed with bcrypt (12 rounds).
 
 **Database schema**: TypeORM `synchronize: true` is enabled in development, which automatically creates all database tables from entity definitions on startup. No migration step is needed — just create the database and start the app.
+
+---
+
+## 📁 Project Structure
+
 ```
+src/
+├── modules/
+│   ├── auth/          # Authentication & authorization
+│   ├── users/         # User management
+│   ├── wallets/       # Wallet operations
+│   ├── transactions/  # Transaction history & idempotency
+│   ├── fx/            # FX rates with caching
+│   ├── trading/       # NGN trading logic
+│   └── email/         # Email service with templates
+├── common/            # Shared utilities, guards, decorators
+├── config/            # Configuration files
+└── database/          # Migrations and seeders
+    └── seeders/
+        └── admin.seeder.ts  # ⚠️ UPDATE ADMIN CREDENTIALS HERE
+```
+
+---
+
+## 📄 License
+
+Copyright © 2024 Vault FX. All rights reserved.
+
+---
 
 **Built with ❤️ for the Fintech Ecosystem**
