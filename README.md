@@ -189,15 +189,6 @@ npm run start:prod
 npm run start:debug
 ```
 
-### Step 6: Verify Installation
-
-```bash
-# Health check
-curl http://localhost:3000/api/v1/health
-
-# Should return:
-# {"status":"ok","timestamp":"2024-03-17T12:00:00.000Z"}
-```
 
 ---
 
