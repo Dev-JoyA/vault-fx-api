@@ -42,8 +42,6 @@ cp .env.example .env   # fill in your values
 createdb vault_fx
 ```
 
-Migrations run automatically on startup (`migrationsRun: true`).
-
 ---
 
 ## Environment Configuration
@@ -55,7 +53,7 @@ The app behaves differently depending on `NODE_ENV`:
 | Feature | Development | Production |
 |---------|-------------|------------|
 | Swagger UI | ✅ Available at `/api/v1/docs` | ❌ Disabled |
-| Database `synchronize` | ✅ Auto-syncs schema | ❌ Off (use migrations) |
+| Database `synchronize` | ✅ Auto-syncs schema | ❌ Off |
 | Database `logging` | ✅ SQL queries logged | ❌ Off |
 | Validation error messages | ✅ Full error details | ❌ Hidden |
 | SSL (database) | ❌ Off (`DB_SSL=false`) | ✅ On (`DB_SSL=true`) |
@@ -91,11 +89,12 @@ npm run start:debug
 
 ## Environment Variables
 
-Create a `.env` file in the project root:
-
-```env
-check ,env,ecample file for this
+Copy `.env.example` to `.env` and fill in your values:
+```bash
+cp .env.example .env
 ```
+
+See `.env.example` in the repository root for all required variables and descriptions.
 
 > **Gmail**: Enable 2FA → Security → App Passwords → generate 16-digit password → use as `SMTP_PASS`.
 
@@ -105,13 +104,22 @@ check ,env,ecample file for this
 
 ## Admin Seeding
 
-An admin account is automatically created when the app starts if it does not already exist. No manual step is needed.
+An admin account is automatically created when the app starts if it does not already exist.
+No manual seed command is needed — the seeder runs inside `bootstrap()` in `main.ts`.
 
-**Default admin credentials:**
+To use your own admin credentials, update this file before starting the app:
+
+**File:** `src/database/seeders/admin.seeder.ts`
+```typescript
+const adminEmail = 'your-email@example.com';  // change this
+
+const passwordHash = await bcrypt.hash(
+  'YourPassword123!',  // change this
+  ...
+);
 ```
-Email:    admin@vault-fx.com
-Password: Admin@123456
-```
+
+The account is created with `isVerified: true` and `role: admin`, so it can log in immediately.
 
 The seeder runs on every startup but never duplicates or overwrites the admin — it is safe in both development and production.
 
@@ -148,9 +156,7 @@ npm run test:cov
 
 Swagger is only available when `NODE_ENV=development`.
 
-```
-http://localhost:3000/api/v1/docs
-```
+**URL:** [http://localhost:3000/api/v1/docs](http://localhost:3000/api/v1/docs)
 
 Click **Authorize** in Swagger and paste your Bearer token from `POST /auth/login` to test protected endpoints.
 
@@ -415,5 +421,8 @@ Any mutating wallet request
 **FX rate caching**: Rates are fetched from ExchangeRate-API v6, stored in an in-memory `Map` with a configurable TTL (default 5 min), and persisted to the database as a fallback. On provider failure, the service falls back to the most recent database rate. Cross-rates (e.g. EUR/GBP) are derived via USD as the intermediary if a direct pair is unavailable.
 
 **Security**: JWT access tokens (15m) with UUID refresh tokens (7d) and full rotation on each refresh. Login attempt tracking with brute force lockout after 5 failed attempts in 15 minutes. Rate limiting on all auth endpoints. Helmet.js security headers applied globally. Swagger disabled in production. Passwords hashed with bcrypt (12 rounds).
+
+**Database schema**: TypeORM `synchronize: true` is enabled in development, which automatically creates all database tables from entity definitions on startup. No migration step is needed — just create the database and start the app.
+```
 
 **Built with ❤️ for the Fintech Ecosystem**
