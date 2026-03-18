@@ -170,8 +170,6 @@ nano .env  # or use any text editor
 # Create PostgreSQL database
 createdb vault_fx
 
-# Run migrations
-npm run migration:run
 
 # (Optional) Seed database with test data
 npm run seed
