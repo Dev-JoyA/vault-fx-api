@@ -197,65 +197,7 @@ npm run start:debug
 ### Complete .env.example
 
 ```env
-# ===========================================
-# SERVER CONFIGURATION
-# ===========================================
-NODE_ENV=development
-PORT=3000
-API_PREFIX=api/v1
-
-# ===========================================
-# DATABASE CONFIGURATION
-# ===========================================
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=your_secure_password
-DB_DATABASE=vault_fx
-
-# ===========================================
-# JWT CONFIGURATION
-# ===========================================
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this-in-production
-JWT_REFRESH_EXPIRES_IN=7d
-
-# ===========================================
-# SECURITY CONFIGURATION
-# ===========================================
-BCRYPT_ROUNDS=12
-CORS_ORIGIN=http://localhost:3000,https://yourdomain.com
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=100
-
-# ===========================================
-# EMAIL CONFIGURATION (GMAIL EXAMPLE)
-# ===========================================
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-16-digit-app-password
-SMTP_FROM="Vault FX" <noreply@vault-fx.com>
-
-# ===========================================
-# OTP CONFIGURATION
-# ===========================================
-OTP_EXPIRY_MINUTES=10
-OTP_LENGTH=6
-
-# ===========================================
-# FX RATES API CONFIGURATION
-# ===========================================
-FX_API_URL=https://api.exchangerate-api.com/v4/latest/
-FX_API_KEY=your-api-key  # Optional for some providers
-FX_CACHE_TTL_SECONDS=300
-
-# ===========================================
-# REDIS CONFIGURATION (OPTIONAL)
-# ===========================================
-REDIS_HOST=localhost
-REDIS_PORT=6379
+check ,env,ecample file for this
 ```
 
 ### Getting Gmail App Password
