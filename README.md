@@ -60,7 +60,6 @@ The app behaves differently depending on `NODE_ENV`:
 | Validation error messages | ✅ Full error details | ❌ Hidden |
 | SSL (database) | ❌ Off (`DB_SSL=false`) | ✅ On (`DB_SSL=true`) |
 
-### Switching Environments
 
 To run in **development**:
 ```env
@@ -82,7 +81,11 @@ npm run start:dev
 # Production
 npm run build
 npm run start:prod
+
+# Debug mode
+npm run start:debug
 ```
+
 
 ---
 
@@ -91,53 +94,7 @@ npm run start:prod
 Create a `.env` file in the project root:
 
 ```env
-# Server
-NODE_ENV=development
-PORT=3000
-API_PREFIX=api/v1
-
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=your_db_username
-DB_PASSWORD=your_db_password
-DB_DATABASE=vault_fx
-DB_SSL=false
-
-# JWT
-JWT_SECRET=your_jwt_secret
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_SECRET=your_refresh_secret
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Security
-BCRYPT_ROUNDS=12
-CORS_ORIGIN=http://localhost:3001
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-
-# Email (Gmail)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your@gmail.com
-SMTP_PASS=your_16_digit_app_password
-SMTP_FROM=Vault FX <noreply@vault-fx.com>
-
-# OTP
-OTP_EXPIRY_MINUTES=10
-OTP_LENGTH=6
-
-# FX Rates
-FX_API_URL=https://v6.exchangerate-api.com/v6/YOUR_API_KEY/latest/
-FX_API_KEY=your_api_key
-FX_CACHE_TTL_SECONDS=300
-
-# Wallet
-WALLET_INITIAL_BALANCE=1000
-
-# Redis (optional)
-REDIS_HOST=localhost
-REDIS_PORT=6379
+check ,env,ecample file for this
 ```
 
 > **Gmail**: Enable 2FA → Security → App Passwords → generate 16-digit password → use as `SMTP_PASS`.
@@ -459,5 +416,4 @@ Any mutating wallet request
 
 **Security**: JWT access tokens (15m) with UUID refresh tokens (7d) and full rotation on each refresh. Login attempt tracking with brute force lockout after 5 failed attempts in 15 minutes. Rate limiting on all auth endpoints. Helmet.js security headers applied globally. Swagger disabled in production. Passwords hashed with bcrypt (12 rounds).
 
-**Database schema**: In development, `synchronize: true` auto-updates the schema on startup for fast iteration. In production, `synchronize: false` and TypeORM migrations are used to prevent accidental data loss or schema drift.
-````
+**Built with ❤️ for the Fintech Ecosystem**
