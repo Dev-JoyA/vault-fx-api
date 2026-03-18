@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('login_attempts')
@@ -8,7 +16,7 @@ export class LoginAttempt {
   id!: string;
 
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
-    userId!: string | null;
+  userId!: string | null;
 
   @Column()
   email!: string;
@@ -17,18 +25,18 @@ export class LoginAttempt {
   isSuccessful!: boolean;
 
   @Column({ type: 'text', nullable: true })
-    ipAddress!: string | null;
+  ipAddress!: string | null;
 
   @Column({ type: 'text', nullable: true })
-    userAgent!: string | null;
+  userAgent!: string | null;
 
   @Column({ type: 'text', nullable: true })
-    failureReason!: string | null;
+  failureReason!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;
 
-@ManyToOne(() => User, (user) => user.id, { nullable: true })
+  @ManyToOne(() => User, (user) => user.id, { nullable: true })
   @JoinColumn({ name: 'user_id' })
   user!: User | null;
 }

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { TransactionsRepository } from './transactions.repository';
 import { TransactionQueryDto } from './dto/transaction.dto';
 import { Transaction } from './entities/transaction.entity';
@@ -12,17 +16,23 @@ export class TransactionsService {
   async getUserTransactions(userId: string, query: TransactionQueryDto) {
     const { page = 1, limit = 10, type, status, fromDate, toDate } = query;
 
-   
     if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
       throw new BadRequestException('fromDate cannot be after toDate');
     }
 
-    const [transactions, total] = await this.transactionsRepository.findByUserWithFilters(
-      userId,
-      { page, limit, type, status, fromDate, toDate },
-    );
+    const [transactions, total] =
+      await this.transactionsRepository.findByUserWithFilters(userId, {
+        page,
+        limit,
+        type,
+        status,
+        fromDate,
+        toDate,
+      });
 
-    const formattedTransactions = transactions.map(tx => this.formatTransactionResponse(tx));
+    const formattedTransactions = transactions.map((tx) =>
+      this.formatTransactionResponse(tx),
+    );
 
     return {
       data: formattedTransactions,
@@ -36,8 +46,9 @@ export class TransactionsService {
   }
 
   async getTransactionByReference(userId: string, reference: string) {
-    const transaction = await this.transactionsRepository.findByReference(reference);
-    
+    const transaction =
+      await this.transactionsRepository.findByReference(reference);
+
     if (!transaction || transaction.userId !== userId) {
       throw new NotFoundException('Transaction not found');
     }
@@ -47,7 +58,7 @@ export class TransactionsService {
 
   async getTransactionById(userId: string, id: string) {
     const transaction = await this.transactionsRepository.findById(id);
-    
+
     if (!transaction || transaction.userId !== userId) {
       throw new NotFoundException('Transaction not found');
     }
@@ -82,8 +93,12 @@ export class TransactionsService {
       status: transaction.status,
       sourceCurrency: transaction.sourceCurrency,
       targetCurrency: transaction.targetCurrency,
-      sourceAmount: transaction.sourceAmount ? Number(transaction.sourceAmount) : null,
-      targetAmount: transaction.targetAmount ? Number(transaction.targetAmount) : null,
+      sourceAmount: transaction.sourceAmount
+        ? Number(transaction.sourceAmount)
+        : null,
+      targetAmount: transaction.targetAmount
+        ? Number(transaction.targetAmount)
+        : null,
       fxRate: transaction.fxRate ? Number(transaction.fxRate) : null,
       reference: transaction.reference,
       walletId: transaction.walletId,

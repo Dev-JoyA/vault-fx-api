@@ -44,7 +44,10 @@ export class AuthRepository {
     });
   }
 
-  async revokeRefreshToken(id: string, replacedByToken?: string): Promise<void> {
+  async revokeRefreshToken(
+    id: string,
+    replacedByToken?: string,
+  ): Promise<void> {
     await this.refreshTokenRepository.update(id, {
       isRevoked: true,
       replacedByToken: replacedByToken || null,
@@ -64,7 +67,11 @@ export class AuthRepository {
     });
   }
 
-  async createPasswordReset(userId: string, otpCode: string, expiresAt: Date): Promise<PasswordReset> {
+  async createPasswordReset(
+    userId: string,
+    otpCode: string,
+    expiresAt: Date,
+  ): Promise<PasswordReset> {
     const passwordReset = this.passwordResetRepository.create({
       userId,
       otpCode,
@@ -73,7 +80,10 @@ export class AuthRepository {
     return await this.passwordResetRepository.save(passwordReset);
   }
 
-  async findValidPasswordReset(userId: string, otpCode: string): Promise<PasswordReset | null> {
+  async findValidPasswordReset(
+    userId: string,
+    otpCode: string,
+  ): Promise<PasswordReset | null> {
     return await this.passwordResetRepository.findOne({
       where: {
         userId,
@@ -117,7 +127,10 @@ export class AuthRepository {
     return await this.loginAttemptRepository.save(attempt);
   }
 
-  async getRecentFailedAttempts(email: string, minutes: number = 15): Promise<number> {
+  async getRecentFailedAttempts(
+    email: string,
+    minutes: number = 15,
+  ): Promise<number> {
     const since = new Date();
     since.setMinutes(since.getMinutes() - minutes);
 
@@ -130,7 +143,10 @@ export class AuthRepository {
     });
   }
 
-  async getUserLoginHistory(userId: string, limit: number = 10): Promise<LoginAttempt[]> {
+  async getUserLoginHistory(
+    userId: string,
+    limit: number = 10,
+  ): Promise<LoginAttempt[]> {
     return await this.loginAttemptRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },

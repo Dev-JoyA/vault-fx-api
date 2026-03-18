@@ -1,4 +1,8 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import * as otpGenerator from 'otp-generator';
@@ -22,8 +26,10 @@ export class EmailService {
 
   private initializeTransporter(): nodemailer.Transporter {
     if (this.isDevelopment) {
-      this.logger.log('Running in development mode - emails will be logged to console');
-      
+      this.logger.log(
+        'Running in development mode - emails will be logged to console',
+      );
+
       return nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
@@ -53,7 +59,10 @@ export class EmailService {
     try {
       const otp = this.generateOtp();
       const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + (this.configService.get<number>('otp.expiryMinutes') || 10));
+      expiresAt.setMinutes(
+        expiresAt.getMinutes() +
+          (this.configService.get<number>('otp.expiryMinutes') || 10),
+      );
 
       await this.emailRepository.create(userId, otp, expiresAt);
 
@@ -65,26 +74,37 @@ export class EmailService {
       };
 
       if (this.isDevelopment) {
-        this.logger.log(`[DEV MODE] Email verification OTP for ${email}: ${otp}`);
+        this.logger.log(
+          `[DEV MODE] Email verification OTP for ${email}: ${otp}`,
+        );
         this.logger.log(`[DEV MODE] Email content would be sent to: ${email}`);
       } else {
         const info = await this.transporter.sendMail(mailOptions);
-        this.logger.log(`Verification email sent to ${email}: ${info.messageId}`);
+        this.logger.log(
+          `Verification email sent to ${email}: ${info.messageId}`,
+        );
       }
 
       return otp;
     } catch (error) {
-      this.logger.error(`Failed to send verification email to ${email}: ${(error as Error).message}`, (error as Error).stack);
-      throw new InternalServerErrorException('Failed to send verification email. Please try again.');
+      this.logger.error(
+        `Failed to send verification email to ${email}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        'Failed to send verification email. Please try again.',
+      );
     }
   }
-
 
   async sendPasswordResetEmail(userId: string, email: string): Promise<string> {
     try {
       const otp = this.generateOtp();
       const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + (this.configService.get<number>('otp.expiryMinutes') || 10));
+      expiresAt.setMinutes(
+        expiresAt.getMinutes() +
+          (this.configService.get<number>('otp.expiryMinutes') || 10),
+      );
 
       await this.emailRepository.createPasswordReset(userId, otp, expiresAt);
 
@@ -98,23 +118,36 @@ export class EmailService {
       if (this.isDevelopment) {
         this.logger.log(`[DEV MODE] Password reset OTP for ${email}: ${otp}`);
         this.logger.log(`[DEV MODE] Email content would be sent to: ${email}`);
-        
-        setTimeout(async () => {
-          await this.sendPasswordResetReminder(email, otp);
-        }, 2 * 60 * 1000);
+
+        setTimeout(
+          async () => {
+            await this.sendPasswordResetReminder(email, otp);
+          },
+          2 * 60 * 1000,
+        );
       } else {
         const info = await this.transporter.sendMail(mailOptions);
-        this.logger.log(`Password reset email sent to ${email}: ${info.messageId}`);
+        this.logger.log(
+          `Password reset email sent to ${email}: ${info.messageId}`,
+        );
       }
 
       return otp;
     } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${email}: ${(error as Error).message}`, (error as Error).stack);
-      throw new InternalServerErrorException('Failed to send password reset email. Please try again.');
+      this.logger.error(
+        `Failed to send password reset email to ${email}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        'Failed to send password reset email. Please try again.',
+      );
     }
   }
 
-  private async sendPasswordResetReminder(email: string, otp: string): Promise<void> {
+  private async sendPasswordResetReminder(
+    email: string,
+    otp: string,
+  ): Promise<void> {
     try {
       const reminderMailOptions = {
         from: this.configService.get<string>('email.from'),
@@ -136,14 +169,16 @@ export class EmailService {
         await this.transporter.sendMail(reminderMailOptions);
       }
     } catch (error) {
-      this.logger.error(`Failed to send password reset reminder to ${email}: ${(error as Error).message}`);
+      this.logger.error(
+        `Failed to send password reset reminder to ${email}: ${(error as Error).message}`,
+      );
     }
   }
 
   async verifyOtp(userId: string, otp: string): Promise<boolean> {
     try {
       const validOtp = await this.emailRepository.findValidOTP(userId, otp);
-      
+
       if (!validOtp) {
         return false;
       }
@@ -151,15 +186,21 @@ export class EmailService {
       await this.emailRepository.markAsUsed(validOtp.id);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to verify OTP for user ${userId}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to verify OTP for user ${userId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
       return false;
     }
   }
 
   async verifyPasswordResetOtp(userId: string, otp: string): Promise<boolean> {
     try {
-      const validOtp = await this.emailRepository.findValidPasswordReset(userId, otp);
-      
+      const validOtp = await this.emailRepository.findValidPasswordReset(
+        userId,
+        otp,
+      );
+
       if (!validOtp) {
         return false;
       }
@@ -167,7 +208,10 @@ export class EmailService {
       await this.emailRepository.markPasswordResetAsUsed(validOtp.id);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to verify password reset OTP for user ${userId}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to verify password reset OTP for user ${userId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
       return false;
     }
   }
@@ -187,11 +231,17 @@ export class EmailService {
         await this.transporter.sendMail(mailOptions);
       }
     } catch (error) {
-      this.logger.error(`Failed to send welcome email to ${email}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to send welcome email to ${email}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
     }
   }
 
-  async sendTransactionAlert(email: string, transactionDetails: any): Promise<void> {
+  async sendTransactionAlert(
+    email: string,
+    transactionDetails: any,
+  ): Promise<void> {
     try {
       const mailOptions = {
         from: this.configService.get<string>('email.from'),
@@ -201,17 +251,28 @@ export class EmailService {
       };
 
       if (this.isDevelopment) {
-        this.logger.log(`[DEV MODE] Transaction alert would be sent to: ${email}`);
-        this.logger.log(`Transaction details: ${JSON.stringify(transactionDetails)}`);
+        this.logger.log(
+          `[DEV MODE] Transaction alert would be sent to: ${email}`,
+        );
+        this.logger.log(
+          `Transaction details: ${JSON.stringify(transactionDetails)}`,
+        );
       } else {
         await this.transporter.sendMail(mailOptions);
       }
     } catch (error) {
-      this.logger.error(`Failed to send transaction alert to ${email}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to send transaction alert to ${email}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
     }
   }
 
-  async sendSecurityAlert(email: string, alertType: string, details: any): Promise<void> {
+  async sendSecurityAlert(
+    email: string,
+    alertType: string,
+    details: any,
+  ): Promise<void> {
     try {
       const subject = this.getSecurityAlertSubject(alertType);
       const template = this.getSecurityAlertTemplate(alertType, details);
@@ -225,22 +286,30 @@ export class EmailService {
 
       if (this.isDevelopment) {
         this.logger.log(`[DEV MODE] Security alert would be sent to: ${email}`);
-        this.logger.log(`Alert details: ${JSON.stringify({ alertType, details })}`);
+        this.logger.log(
+          `Alert details: ${JSON.stringify({ alertType, details })}`,
+        );
       } else {
         await this.transporter.sendMail(mailOptions);
       }
     } catch (error) {
-      this.logger.error(`Failed to send security alert to ${email}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to send security alert to ${email}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
     }
   }
 
   private generateOtp(): string {
-    return otpGenerator.generate(this.configService.get<number>('otp.length') || 6, {
-      digits: true,
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
-    });
+    return otpGenerator.generate(
+      this.configService.get<number>('otp.length') || 6,
+      {
+        digits: true,
+        upperCaseAlphabets: false,
+        lowerCaseAlphabets: false,
+        specialChars: false,
+      },
+    );
   }
 
   private getWelcomeTemplate(name: string): string {
@@ -263,7 +332,8 @@ export class EmailService {
   }
 
   private getTransactionAlertTemplate(transaction: any): string {
-    const isCredit = transaction.type === 'FUND' || transaction.type === 'TRADE_BUY';
+    const isCredit =
+      transaction.type === 'FUND' || transaction.type === 'TRADE_BUY';
     const color = isCredit ? '#28a745' : '#DC3545';
     const sign = isCredit ? '+' : '-';
 
@@ -319,7 +389,9 @@ export class EmailService {
         </div>
       `,
     };
-    return templates[alertType] || '<p>Security alert for your Vault FX account.</p>';
+    return (
+      templates[alertType] || '<p>Security alert for your Vault FX account.</p>'
+    );
   }
 
   async cleanupExpiredOtps(): Promise<void> {
@@ -327,43 +399,54 @@ export class EmailService {
       await this.emailRepository.deleteExpired();
       this.logger.log('Cleaned up expired OTPs');
     } catch (error) {
-      this.logger.error(`Failed to cleanup expired OTPs: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Failed to cleanup expired OTPs: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
     }
   }
 
   async resendVerificationOtp(userId: string, email: string): Promise<void> {
-  try {
-    await this.emailRepository.invalidateUserOtps(userId);
-    
-    const otp = this.generateOtp();
-    const expiresAt = new Date();
-    expiresAt.setMinutes(
-      expiresAt.getMinutes() + 
-      (this.configService.get<number>('otp.expiryMinutes') || 10)
-    );
+    try {
+      await this.emailRepository.invalidateUserOtps(userId);
 
-    await this.emailRepository.create(userId, otp, expiresAt);
+      const otp = this.generateOtp();
+      const expiresAt = new Date();
+      expiresAt.setMinutes(
+        expiresAt.getMinutes() +
+          (this.configService.get<number>('otp.expiryMinutes') || 10),
+      );
 
-    const mailOptions = {
-      from: this.configService.get<string>('email.from'),
-      to: email,
-      subject: '🔄 New Verification Code - Vault FX',
-      html: getVerificationEmailTemplate(otp, email.split('@')[0]),
-    };
+      await this.emailRepository.create(userId, otp, expiresAt);
 
-    if (this.isDevelopment) {
-      this.logger.log(`[DEV MODE] Resent verification OTP for ${email}: ${otp}`);
-    } else {
-      const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Resent verification email to ${email}: ${info.messageId}`);
+      const mailOptions = {
+        from: this.configService.get<string>('email.from'),
+        to: email,
+        subject: '🔄 New Verification Code - Vault FX',
+        html: getVerificationEmailTemplate(otp, email.split('@')[0]),
+      };
+
+      if (this.isDevelopment) {
+        this.logger.log(
+          `[DEV MODE] Resent verification OTP for ${email}: ${otp}`,
+        );
+      } else {
+        const info = await this.transporter.sendMail(mailOptions);
+        this.logger.log(
+          `Resent verification email to ${email}: ${info.messageId}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to resend verification email to ${email}: ${(error as Error).message}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to resend verification email. Please try again.',
+      );
     }
-  } catch (error) {
-    this.logger.error(`Failed to resend verification email to ${email}: ${(error as Error).message}`);
-    throw new InternalServerErrorException('Failed to resend verification email. Please try again.');
   }
-}
 
-async invalidateUserOtps(userId: string): Promise<void> {
-  await this.emailRepository.invalidateUserOtps(userId);
-}
+  async invalidateUserOtps(userId: string): Promise<void> {
+    await this.emailRepository.invalidateUserOtps(userId);
+  }
 }

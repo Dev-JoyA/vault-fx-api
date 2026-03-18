@@ -1,4 +1,11 @@
-import { IsString, Length, IsNumber, IsPositive, Min, IsUUID } from 'class-validator';
+import {
+  IsString,
+  Length,
+  IsNumber,
+  IsPositive,
+  Min,
+  IsUUID,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class TransferDto {

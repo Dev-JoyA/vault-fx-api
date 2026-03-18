@@ -6,11 +6,7 @@ import { FxModule } from '../fx/fx.modules';
 import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
-  imports: [
-    WalletsModule,
-    FxModule,
-    TransactionsModule,
-  ],
+  imports: [WalletsModule, FxModule, TransactionsModule],
   controllers: [TradingController],
   providers: [TradingService],
   exports: [TradingService],

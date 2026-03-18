@@ -10,7 +10,10 @@ export class IdempotencyRepository {
     private readonly repository: Repository<IdempotencyRecord>,
   ) {}
 
-  async findValidKey(key: string, userId: string): Promise<IdempotencyRecord | null> {
+  async findValidKey(
+    key: string,
+    userId: string,
+  ): Promise<IdempotencyRecord | null> {
     return await this.repository.findOne({
       where: {
         key,
@@ -25,7 +28,7 @@ export class IdempotencyRepository {
     userId: string,
     endpoint: string,
     requestBody: Record<string, any>,
-    ttlMinutes: number = 24 * 60, 
+    ttlMinutes: number = 24 * 60,
   ): Promise<IdempotencyRecord> {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + ttlMinutes);
@@ -45,10 +48,7 @@ export class IdempotencyRepository {
     responseBody: Record<string, any>,
     responseCode: number,
   ): Promise<void> {
-    await this.repository.update(
-      { key },
-      { responseBody, responseCode },
-    );
+    await this.repository.update({ key }, { responseBody, responseCode });
   }
 
   async cleanupExpired(): Promise<void> {

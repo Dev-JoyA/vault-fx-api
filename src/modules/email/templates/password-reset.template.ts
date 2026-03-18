@@ -1,6 +1,9 @@
-export const getPasswordResetTemplate = (otp: string, name?: string): string => {
+export const getPasswordResetTemplate = (
+  otp: string,
+  name?: string,
+): string => {
   const userName = name || 'Valued User';
-  
+
   return `
     <!DOCTYPE html>
     <html lang="en">

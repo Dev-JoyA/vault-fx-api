@@ -14,10 +14,17 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
+import { WalletsRepository } from '../wallets/wallets.repository';
+import { Wallet } from '../wallets/entities/wallet.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RefreshToken, PasswordReset, LoginAttempt]),
+    TypeOrmModule.forFeature([
+      RefreshToken,
+      PasswordReset,
+      LoginAttempt,
+      Wallet,
+    ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -27,11 +34,10 @@ import { EmailModule } from '../email/email.module';
         if (!secret) {
           throw new Error('JWT secret is not defined');
         }
-        
         return {
           secret,
           signOptions: {
-            expiresIn: '15m'
+            expiresIn: '15m',
           },
         };
       },
@@ -45,6 +51,7 @@ import { EmailModule } from '../email/email.module';
     AuthRepository,
     JwtStrategy,
     LocalStrategy,
+    WalletsRepository,
   ],
   exports: [AuthService],
 })

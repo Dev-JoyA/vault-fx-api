@@ -1,6 +1,10 @@
-export const getVerificationEmailTemplate = (otp: string, name?: string, email?: string): string => {
+export const getVerificationEmailTemplate = (
+  otp: string,
+  name?: string,
+  email?: string,
+): string => {
   const userName = name || 'Valued User';
-  
+
   return `
     <!DOCTYPE html>
     <html lang="en">

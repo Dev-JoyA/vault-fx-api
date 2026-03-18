@@ -22,9 +22,7 @@ describe('WalletsController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WalletsController],
-      providers: [
-        { provide: WalletsService, useValue: mockWalletsService },
-      ],
+      providers: [{ provide: WalletsService, useValue: mockWalletsService }],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
@@ -70,11 +68,7 @@ describe('WalletsController', () => {
     it('should work without idempotency key', async () => {
       mockWalletsService.transferToUser.mockResolvedValue({});
 
-      await controller.transfer(
-        mockRequest as any,
-        transferDto,
-        undefined,
-      );
+      await controller.transfer(mockRequest as any, transferDto, undefined);
 
       expect(walletsService.transferToUser).toHaveBeenCalledWith(
         'test-user-id',
@@ -93,7 +87,11 @@ describe('WalletsController', () => {
       };
 
       try {
-        await controller.transfer(mockRequest as any, invalidDto as any, idempotencyKey);
+        await controller.transfer(
+          mockRequest as any,
+          invalidDto as any,
+          idempotencyKey,
+        );
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -107,7 +105,11 @@ describe('WalletsController', () => {
       };
 
       try {
-        await controller.transfer(mockRequest as any, invalidDto as any, idempotencyKey);
+        await controller.transfer(
+          mockRequest as any,
+          invalidDto as any,
+          idempotencyKey,
+        );
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -121,7 +123,11 @@ describe('WalletsController', () => {
       };
 
       try {
-        await controller.transfer(mockRequest as any, invalidDto as any, idempotencyKey);
+        await controller.transfer(
+          mockRequest as any,
+          invalidDto as any,
+          idempotencyKey,
+        );
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -133,7 +139,7 @@ describe('WalletsController', () => {
       );
 
       await expect(
-        controller.transfer(mockRequest as any, transferDto, idempotencyKey)
+        controller.transfer(mockRequest as any, transferDto, idempotencyKey),
       ).rejects.toThrow('Insufficient balance');
     });
   });

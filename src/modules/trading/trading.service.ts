@@ -6,6 +6,16 @@ import { WalletResponse } from '../../common/interfaces/wallet-response.interfac
 
 @Injectable()
 export class TradingService {
+  private readonly supportedCurrencies = [
+    'USD',
+    'EUR',
+    'GBP',
+    'CAD',
+    'JPY',
+    'CHF',
+    'AUD',
+  ];
+
   constructor(
     private readonly walletsService: WalletsService,
     private readonly fxService: FxService,
@@ -18,37 +28,37 @@ export class TradingService {
     idempotencyKey?: string,
   ) {
     if (targetCurrency === 'NGN') {
-      throw new BadRequestException('Target currency cannot be NGN for NGN to foreign trade');
+      throw new BadRequestException('Target currency cannot be NGN');
+    }
+
+    if (!this.supportedCurrencies.includes(targetCurrency)) {
+      throw new BadRequestException(
+        `Unsupported currency: ${targetCurrency}. Supported: ${this.supportedCurrencies.join(', ')}`,
+      );
     }
 
     const rate = await this.fxService.getPairRate('NGN', targetCurrency);
-   
-    const foreignAmount = Number((ngnAmount * rate).toFixed(2));
 
-    
-
-    const result = await this.walletsService.convertCurrency(
+    const result = (await this.walletsService.convertCurrency(
       userId,
       'NGN',
       targetCurrency,
       ngnAmount,
       rate,
       idempotencyKey,
-    ) as WalletResponse;
-
-    const transactionData = result.data || result.transaction || result;
+    )) as WalletResponse;
 
     return {
       message: 'Trade executed successfully',
       data: {
-        reference: transactionData.reference || '',
+        reference: result.data.reference,
         tradeType: TradeType.NGN_TO_FOREIGN,
         fromCurrency: 'NGN',
         toCurrency: targetCurrency,
         fromAmount: ngnAmount,
-        toAmount: foreignAmount,
+        toAmount: result.data.toAmount,
         rate: rate,
-        timestamp: transactionData.timestamp || new Date(),
+        timestamp: result.data.timestamp,
       },
     };
   }
@@ -60,35 +70,39 @@ export class TradingService {
     idempotencyKey?: string,
   ) {
     if (sourceCurrency === 'NGN') {
-      throw new BadRequestException('Source currency cannot be NGN for foreign to NGN trade');
+      throw new BadRequestException(
+        'Source currency cannot be NGN for foreign to NGN trade',
+      );
+    }
+
+    if (!this.supportedCurrencies.includes(sourceCurrency)) {
+      throw new BadRequestException(
+        `Unsupported currency: ${sourceCurrency}. Supported: ${this.supportedCurrencies.join(', ')}`,
+      );
     }
 
     const rate = await this.fxService.getPairRate(sourceCurrency, 'NGN');
-   
-    const ngnAmount = Number((foreignAmount * rate).toFixed(2));
 
-    const result = await this.walletsService.convertCurrency(
+    const result = (await this.walletsService.convertCurrency(
       userId,
       sourceCurrency,
       'NGN',
       foreignAmount,
       rate,
       idempotencyKey,
-    ) as WalletResponse;
-
-    const transactionData = result.data || result.transaction || result;
+    )) as WalletResponse;
 
     return {
       message: 'Trade executed successfully',
       data: {
-        reference: transactionData.reference || '',
+        reference: result.data.reference,
         tradeType: TradeType.FOREIGN_TO_NGN,
         fromCurrency: sourceCurrency,
         toCurrency: 'NGN',
         fromAmount: foreignAmount,
-        toAmount: ngnAmount,
+        toAmount: result.data.toAmount,
         rate: rate,
-        timestamp: transactionData.timestamp || new Date(),
+        timestamp: result.data.timestamp,
       },
     };
   }

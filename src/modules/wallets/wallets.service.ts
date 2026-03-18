@@ -1,25 +1,35 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { WalletsRepository } from './wallets.repository';
-import { TransactionsRepository } from '../transactions/transactions.repository';
+import { Wallet } from './entities/wallet.entity';
 import { IdempotencyRepository } from '../transactions/idempotency.repository';
-import { TransactionType, TransactionStatus } from '../transactions/entities/transaction.entity';
-import { WalletResponse, WalletTransactionData } from '../../common/interfaces/wallet-response.interface';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../transactions/entities/transaction.entity';
+import {
+  WalletResponse,
+  WalletTransactionData,
+} from '../../common/interfaces/wallet-response.interface';
 
 @Injectable()
 export class WalletsService {
   constructor(
     private readonly walletsRepository: WalletsRepository,
-    private readonly transactionsRepository: TransactionsRepository,
     private readonly idempotencyRepository: IdempotencyRepository,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async getUserWallets(userId: string) {
     const wallets = await this.walletsRepository.findByUser(userId);
-    return wallets.map(wallet => ({
+    return wallets.map((wallet) => ({
       id: wallet.id,
       currency: wallet.currency,
       balance: Number(wallet.balance),
@@ -30,14 +40,17 @@ export class WalletsService {
   }
 
   async getWalletBalance(userId: string, currency: string) {
-    const wallet = await this.walletsRepository.findByUserAndCurrency(userId, currency);
+    const wallet = await this.walletsRepository.findByUserAndCurrency(
+      userId,
+      currency,
+    );
     if (!wallet) {
       throw new NotFoundException(`Wallet for ${currency} not found`);
     }
-    return { 
-      currency, 
-      balance: Number(wallet.balance), 
-      walletId: wallet.id 
+    return {
+      currency,
+      balance: Number(wallet.balance),
+      walletId: wallet.id,
     };
   }
 
@@ -48,7 +61,7 @@ export class WalletsService {
     idempotencyKey?: string,
   ) {
     const finalIdempotencyKey = idempotencyKey || uuidv4();
-    
+
     const existingRecord = await this.idempotencyRepository.findValidKey(
       finalIdempotencyKey,
       userId,
@@ -73,19 +86,30 @@ export class WalletsService {
     await queryRunner.startTransaction();
 
     try {
-      let wallet = await this.walletsRepository.findByUserAndCurrency(userId, currency);
-      
+      const walletRepo = queryRunner.manager.getRepository(Wallet);
+      const transactionRepo = queryRunner.manager.getRepository(
+        (await import('../transactions/entities/transaction.entity'))
+          .Transaction,
+      );
+
+      let wallet = await walletRepo.findOne({
+        where: { userId, currency, isActive: true },
+      });
+
       if (!wallet) {
-        wallet = await this.walletsRepository.create(userId, currency);
+        wallet = walletRepo.create({ userId, currency, balance: '0' });
+        wallet = await walletRepo.save(wallet);
       }
 
       const currentBalance = Number(wallet.balance);
       const newBalance = currentBalance + amount;
-      
-      await this.walletsRepository.updateBalance(wallet.id, newBalance);
+
+      await walletRepo.update(wallet.id, {
+        balance: newBalance.toString(),
+      });
 
       const reference = `FUND_${Date.now()}_${uuidv4().substring(0, 8)}`;
-      const transaction = await this.transactionsRepository.create({
+      const transaction = transactionRepo.create({
         userId,
         walletId: wallet.id,
         type: TransactionType.FUND,
@@ -96,15 +120,16 @@ export class WalletsService {
         metadata: { idempotencyKey: finalIdempotencyKey },
         completedAt: new Date(),
       });
+      const savedTransaction = await transactionRepo.save(transaction);
 
       await queryRunner.commitTransaction();
 
       const transactionData: WalletTransactionData = {
-        reference: transaction.reference,
+        reference: savedTransaction.reference,
         currency,
         amount,
         newBalance,
-        timestamp: transaction.completedAt,
+        timestamp: savedTransaction.completedAt,
       };
 
       const response: WalletResponse = {
@@ -121,14 +146,15 @@ export class WalletsService {
       return response;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       await this.idempotencyRepository.updateResponse(
         finalIdempotencyKey,
         { error: errorMessage },
         500,
       );
-      
+
       throw error;
     } finally {
       await queryRunner.release();
@@ -162,18 +188,23 @@ export class WalletsService {
     idempotencyKey?: string,
   ) {
     if (fromCurrency === toCurrency) {
-      throw new BadRequestException('Source and target currencies must be different');
+      throw new BadRequestException(
+        'Source and target currencies must be different',
+      );
     }
 
     const finalIdempotencyKey = idempotencyKey || uuidv4();
-    
+
     const existingRecord = await this.idempotencyRepository.findValidKey(
       finalIdempotencyKey,
       userId,
     );
 
-    if (existingRecord?.responseBody) {
-      return existingRecord.responseBody;
+    if (existingRecord) {
+      if (existingRecord.responseBody) {
+        return existingRecord.responseBody;
+      }
+      throw new ConflictException('Request already in progress');
     }
 
     await this.idempotencyRepository.createRecord(
@@ -188,34 +219,56 @@ export class WalletsService {
     await queryRunner.startTransaction();
 
     try {
-      const fromWallet = await this.walletsRepository.findByUserAndCurrency(userId, fromCurrency);
-      let toWallet = await this.walletsRepository.findByUserAndCurrency(userId, toCurrency);
+      const walletRepo = queryRunner.manager.getRepository(Wallet);
+      const transactionRepo = queryRunner.manager.getRepository(
+        (await import('../transactions/entities/transaction.entity'))
+          .Transaction,
+      );
+
+      const fromWallet = await walletRepo.findOne({
+        where: { userId, currency: fromCurrency, isActive: true },
+      });
 
       if (!fromWallet) {
-        throw new BadRequestException(`You don't have a ${fromCurrency} wallet`);
+        throw new BadRequestException(
+          `You don't have a ${fromCurrency} wallet`,
+        );
       }
 
       const fromBalance = Number(fromWallet.balance);
       if (fromBalance < amount) {
-        throw new BadRequestException(`Insufficient ${fromCurrency} balance. You have ${fromBalance} ${fromCurrency}`);
+        throw new BadRequestException(
+          `Insufficient ${fromCurrency} balance. You have ${fromBalance} ${fromCurrency}`,
+        );
       }
 
       const targetAmount = Number((amount * fxRate).toFixed(2));
-
       const newFromBalance = fromBalance - amount;
-      await this.walletsRepository.updateBalance(fromWallet.id, newFromBalance);
+
+      await walletRepo.update(fromWallet.id, {
+        balance: newFromBalance.toString(),
+      });
+
+      let toWallet = await walletRepo.findOne({
+        where: { userId, currency: toCurrency, isActive: true },
+      });
 
       if (toWallet) {
-        const toBalance = Number(toWallet.balance);
-        const newToBalance = toBalance + targetAmount;
-        await this.walletsRepository.updateBalance(toWallet.id, newToBalance);
+        const newToBalance = Number(toWallet.balance) + targetAmount;
+        await walletRepo.update(toWallet.id, {
+          balance: newToBalance.toString(),
+        });
       } else {
-        toWallet = await this.walletsRepository.create(userId, toCurrency);
-        await this.walletsRepository.updateBalance(toWallet.id, targetAmount);
+        toWallet = walletRepo.create({
+          userId,
+          currency: toCurrency,
+          balance: targetAmount.toString(),
+        });
+        await walletRepo.save(toWallet);
       }
 
       const reference = `CONV_${Date.now()}_${uuidv4().substring(0, 8)}`;
-      const transaction = await this.transactionsRepository.create({
+      const transaction = transactionRepo.create({
         userId,
         walletId: fromWallet.id,
         type: TransactionType.CONVERT,
@@ -229,17 +282,18 @@ export class WalletsService {
         metadata: { idempotencyKey: finalIdempotencyKey },
         completedAt: new Date(),
       });
+      const savedTransaction = await transactionRepo.save(transaction);
 
       await queryRunner.commitTransaction();
 
       const transactionData: WalletTransactionData = {
-        reference: transaction.reference,
+        reference: savedTransaction.reference,
         fromCurrency,
         toCurrency,
         fromAmount: amount,
         toAmount: targetAmount,
         rate: fxRate,
-        timestamp: transaction.completedAt,
+        timestamp: savedTransaction.completedAt,
       };
 
       const response: WalletResponse = {
@@ -256,8 +310,9 @@ export class WalletsService {
       return response;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       await this.idempotencyRepository.updateResponse(
         finalIdempotencyKey,
         { error: errorMessage },
@@ -281,14 +336,17 @@ export class WalletsService {
     }
 
     const finalIdempotencyKey = idempotencyKey || uuidv4();
-    
+
     const existingRecord = await this.idempotencyRepository.findValidKey(
       finalIdempotencyKey,
       senderId,
     );
 
-    if (existingRecord?.responseBody) {
-      return existingRecord.responseBody;
+    if (existingRecord) {
+      if (existingRecord.responseBody) {
+        return existingRecord.responseBody;
+      }
+      throw new ConflictException('Request already in progress');
     }
 
     await this.idempotencyRepository.createRecord(
@@ -303,30 +361,54 @@ export class WalletsService {
     await queryRunner.startTransaction();
 
     try {
-      const senderWallet = await this.walletsRepository.findByUserAndCurrency(senderId, currency);
+      const walletRepo = queryRunner.manager.getRepository(Wallet);
+      const transactionRepo = queryRunner.manager.getRepository(
+        (await import('../transactions/entities/transaction.entity'))
+          .Transaction,
+      );
+
+      const senderWallet = await walletRepo.findOne({
+        where: { userId: senderId, currency, isActive: true },
+      });
+
       if (!senderWallet) {
-        throw new BadRequestException(`You don't have a ${currency} wallet. Please fund a ${currency} wallet first.`);
+        throw new BadRequestException(
+          `You don't have a ${currency} wallet. Please fund a ${currency} wallet first.`,
+        );
       }
 
       const senderBalance = Number(senderWallet.balance);
       if (senderBalance < amount) {
-        throw new BadRequestException(`Insufficient ${currency} balance. You have ${senderBalance} ${currency}`);
+        throw new BadRequestException(
+          `Insufficient ${currency} balance. You have ${senderBalance} ${currency}`,
+        );
       }
 
-      let recipientWallet = await this.walletsRepository.findByUserAndCurrency(recipientId, currency);
+      let recipientWallet = await walletRepo.findOne({
+        where: { userId: recipientId, currency, isActive: true },
+      });
+
       if (!recipientWallet) {
-        recipientWallet = await this.walletsRepository.create(recipientId, currency);
+        recipientWallet = walletRepo.create({
+          userId: recipientId,
+          currency,
+          balance: '0',
+        });
+        recipientWallet = await walletRepo.save(recipientWallet);
       }
 
       const newSenderBalance = senderBalance - amount;
-      const recipientBalance = Number(recipientWallet.balance);
-      const newRecipientBalance = recipientBalance + amount;
+      const newRecipientBalance = Number(recipientWallet.balance) + amount;
 
-      await this.walletsRepository.updateBalance(senderWallet.id, newSenderBalance);
-      await this.walletsRepository.updateBalance(recipientWallet.id, newRecipientBalance);
+      await walletRepo.update(senderWallet.id, {
+        balance: newSenderBalance.toString(),
+      });
+      await walletRepo.update(recipientWallet.id, {
+        balance: newRecipientBalance.toString(),
+      });
 
       const reference = `TRF_${Date.now()}_${uuidv4().substring(0, 8)}`;
-      const transaction = await this.transactionsRepository.create({
+      const transaction = transactionRepo.create({
         userId: senderId,
         walletId: senderWallet.id,
         type: TransactionType.TRANSFER,
@@ -334,22 +416,23 @@ export class WalletsService {
         sourceCurrency: currency,
         sourceAmount: amount.toString(),
         reference,
-        metadata: { 
+        metadata: {
           idempotencyKey: finalIdempotencyKey,
           recipientId,
           recipientWalletId: recipientWallet.id,
         },
         completedAt: new Date(),
       });
+      const savedTransaction = await transactionRepo.save(transaction);
 
       await queryRunner.commitTransaction();
 
       const transactionData: WalletTransactionData = {
-        reference: transaction.reference,
+        reference: savedTransaction.reference,
         currency,
         amount,
         newBalance: newSenderBalance,
-        timestamp: transaction.completedAt
+        timestamp: savedTransaction.completedAt,
       };
 
       const response: WalletResponse = {
@@ -357,18 +440,24 @@ export class WalletsService {
         data: transactionData,
       };
 
-      await this.idempotencyRepository.updateResponse(finalIdempotencyKey, response, 200);
+      await this.idempotencyRepository.updateResponse(
+        finalIdempotencyKey,
+        response,
+        200,
+      );
+
       return response;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error occurred';
       await this.idempotencyRepository.updateResponse(
         finalIdempotencyKey,
         { error: errorMessage },
         500,
       );
-      
+
       throw error;
     } finally {
       await queryRunner.release();
