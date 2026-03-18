@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('refresh_tokens')
@@ -20,9 +28,9 @@ export class RefreshToken {
   isRevoked!: boolean;
 
   @Column({ type: 'varchar', nullable: true })
-    replacedByToken!: string | null;
+  replacedByToken!: string | null;
 
-  @Column({type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true })
   userAgent!: string | null;
 
   @Column({ type: 'text', nullable: true })

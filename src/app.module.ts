@@ -24,15 +24,15 @@ import { TradingModule } from './modules/trading/trading.module';
       load: [configuration],
       envFilePath: '.env',
     }),
-    
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: getDatabaseConfig,
     }),
-    
+
     ThrottlerModule.forRoot(throttlerConfig),
-    
+
     AuthModule,
     UsersModule,
     EmailModule,

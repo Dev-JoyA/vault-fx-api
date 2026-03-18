@@ -13,7 +13,11 @@ export class EmailRepository {
     private readonly passwordResetRepository: Repository<PasswordReset>,
   ) {}
 
-  async create(userId: string, otpCode: string, expiresAt: Date): Promise<EmailVerification> {
+  async create(
+    userId: string,
+    otpCode: string,
+    expiresAt: Date,
+  ): Promise<EmailVerification> {
     const verification = this.emailRepository.create({
       userId,
       otpCode,
@@ -22,7 +26,11 @@ export class EmailRepository {
     return await this.emailRepository.save(verification);
   }
 
-  async createPasswordReset(userId: string, otpCode: string, expiresAt: Date): Promise<PasswordReset> {
+  async createPasswordReset(
+    userId: string,
+    otpCode: string,
+    expiresAt: Date,
+  ): Promise<PasswordReset> {
     const passwordReset = this.passwordResetRepository.create({
       userId,
       otpCode,
@@ -31,7 +39,10 @@ export class EmailRepository {
     return await this.passwordResetRepository.save(passwordReset);
   }
 
-  async findValidOTP(userId: string, otpCode: string): Promise<EmailVerification | null> {
+  async findValidOTP(
+    userId: string,
+    otpCode: string,
+  ): Promise<EmailVerification | null> {
     return await this.emailRepository.findOne({
       where: {
         userId,
@@ -42,7 +53,10 @@ export class EmailRepository {
     });
   }
 
-  async findValidPasswordReset(userId: string, otpCode: string): Promise<PasswordReset | null> {
+  async findValidPasswordReset(
+    userId: string,
+    otpCode: string,
+  ): Promise<PasswordReset | null> {
     return await this.passwordResetRepository.findOne({
       where: {
         userId,
@@ -78,22 +92,25 @@ export class EmailRepository {
     });
   }
 
-  async countRecentAttempts(userId: string, minutes: number = 5): Promise<number> {
-  const since = new Date();
-  since.setMinutes(since.getMinutes() - minutes);
-  
-  return await this.emailRepository.count({
-    where: {
-      userId,
-      createdAt: MoreThan(since),
-    },
-  });
-}
+  async countRecentAttempts(
+    userId: string,
+    minutes: number = 5,
+  ): Promise<number> {
+    const since = new Date();
+    since.setMinutes(since.getMinutes() - minutes);
 
-async invalidateUserOtps(userId: string): Promise<void> {
-  await this.emailRepository.update(
-    { userId, isUsed: false },
-    { isUsed: true }
-  );
-}
+    return await this.emailRepository.count({
+      where: {
+        userId,
+        createdAt: MoreThan(since),
+      },
+    });
+  }
+
+  async invalidateUserOtps(userId: string): Promise<void> {
+    await this.emailRepository.update(
+      { userId, isUsed: false },
+      { isUsed: true },
+    );
+  }
 }

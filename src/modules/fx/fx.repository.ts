@@ -10,24 +10,35 @@ export class FxRepository {
     private readonly fxRepository: Repository<FxRate>,
   ) {}
 
-  async createRate(baseCurrency: string, targetCurrency: string, rate: number): Promise<FxRate> {
+  async createRate(
+    baseCurrency: string,
+    targetCurrency: string,
+    rate: number,
+  ): Promise<FxRate> {
     const fxRate = this.fxRepository.create({
       baseCurrency,
       targetCurrency,
-      rate: rate.toString(), 
+      rate: rate.toString(),
       timestamp: new Date(),
     });
     return await this.fxRepository.save(fxRate);
   }
 
-  async findLatestRate(baseCurrency: string, targetCurrency: string): Promise<FxRate | null> {
+  async findLatestRate(
+    baseCurrency: string,
+    targetCurrency: string,
+  ): Promise<FxRate | null> {
     return await this.fxRepository.findOne({
       where: { baseCurrency, targetCurrency },
       order: { timestamp: 'DESC' },
     });
   }
 
-  async findRatesAfter(baseCurrency: string, targetCurrency: string, after: Date): Promise<FxRate[]> {
+  async findRatesAfter(
+    baseCurrency: string,
+    targetCurrency: string,
+    after: Date,
+  ): Promise<FxRate[]> {
     return await this.fxRepository.find({
       where: {
         baseCurrency,

@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, FindOptionsWhere } from 'typeorm';
-import { Transaction, TransactionStatus, TransactionType } from './entities/transaction.entity';
+import {
+  Repository,
+  Between,
+  MoreThan,
+  LessThan,
+  FindOptionsWhere,
+} from 'typeorm';
+import {
+  Transaction,
+  TransactionStatus,
+  TransactionType,
+} from './entities/transaction.entity';
 
 export interface TransactionFilterOptions {
   page?: number;
@@ -25,20 +35,24 @@ export class TransactionsRepository {
   }
 
   async findById(id: string): Promise<Transaction | null> {
-    return await this.transactionRepository.findOne({ 
+    return await this.transactionRepository.findOne({
       where: { id },
       relations: ['user', 'wallet'],
     });
   }
 
   async findByReference(reference: string): Promise<Transaction | null> {
-    return await this.transactionRepository.findOne({ 
+    return await this.transactionRepository.findOne({
       where: { reference },
       relations: ['user', 'wallet'],
     });
   }
 
-  async findByUser(userId: string, page: number = 1, limit: number = 10): Promise<[Transaction[], number]> {
+  async findByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<[Transaction[], number]> {
     return await this.transactionRepository.findAndCount({
       where: { userId },
       order: { createdAt: 'DESC' },
@@ -49,17 +63,10 @@ export class TransactionsRepository {
   }
 
   async findByUserWithFilters(
-    userId: string, 
-    options: TransactionFilterOptions
+    userId: string,
+    options: TransactionFilterOptions,
   ): Promise<[Transaction[], number]> {
-    const { 
-      page = 1, 
-      limit = 10, 
-      type, 
-      status, 
-      fromDate, 
-      toDate 
-    } = options;
+    const { page = 1, limit = 10, type, status, fromDate, toDate } = options;
 
     const where: FindOptionsWhere<Transaction> = { userId };
 
@@ -103,14 +110,21 @@ export class TransactionsRepository {
     });
   }
 
-  async getTransactionSummary(userId: string, startDate: Date, endDate: Date): Promise<any> {
+  async getTransactionSummary(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<any> {
     const transactions = await this.transactionRepository
       .createQueryBuilder('transaction')
       .select('transaction.type', 'type')
       .addSelect('COUNT(*)', 'count')
       .addSelect('SUM(transaction.sourceAmount)', 'totalAmount')
       .where('transaction.userId = :userId', { userId })
-      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
       .groupBy('transaction.type')
       .getRawMany();
 

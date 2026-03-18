@@ -14,5 +14,5 @@ export interface WalletTransactionData {
 export interface WalletResponse {
   message: string;
   data: WalletTransactionData;
-  transaction?: WalletTransactionData; 
+  transaction?: WalletTransactionData;
 }

@@ -7,10 +7,7 @@ import { WalletsController } from './wallets.controller';
 import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Wallet]),
-    TransactionsModule, 
-  ],
+  imports: [TypeOrmModule.forFeature([Wallet]), TransactionsModule],
   controllers: [WalletsController],
   providers: [WalletsService, WalletsRepository],
   exports: [WalletsService, WalletsRepository],

@@ -1,4 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Wallet } from '../../wallets/entities/wallet.entity';
 import { Transaction } from '../../transactions/entities/transaction.entity';
@@ -26,7 +33,7 @@ export class User {
   role!: string;
 
   @Column({ type: 'timestamptz', nullable: true, default: null })
-    lastLoginAt!: Date | null;
+  lastLoginAt!: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;
@@ -50,5 +57,5 @@ export class User {
   passwordResets!: PasswordReset[];
 
   @OneToMany(() => LoginAttempt, (loginAttempt) => loginAttempt.user)
-    loginAttempts!: LoginAttempt[];
+  loginAttempts!: LoginAttempt[];
 }

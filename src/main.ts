@@ -9,14 +9,12 @@ import * as compression from 'compression';
 import { seedAdmin } from './database/seeders/admin.seeder';
 
 async function bootstrap() {
-
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const dataSource = app.get(DataSource);
   const isProduction = configService.get('nodeEnv') === 'production';
   const port = configService.get<number>('port') ?? 3000;
   const apiPrefix = configService.get<string>('apiPrefix') ?? 'api';
-
 
   await seedAdmin(dataSource, configService);
 
@@ -56,8 +54,8 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix(apiPrefix, {
-  exclude: [`${apiPrefix}/docs`, `${apiPrefix}/docs-json`],
-});
+    exclude: ['docs', 'docs-json'],
+  });
   app.enableShutdownHooks();
 
   if (!isProduction) {
@@ -74,16 +72,20 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup(`${apiPrefix}/docs`, app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+    SwaggerModule.setup(`${apiPrefix}/docs`, app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
 
-    console.log(`Swagger available at: http://localhost:${port}/${apiPrefix}/docs`);
+    console.log(
+      `Swagger available at: http://localhost:${port}/${apiPrefix}/docs`,
+    );
   }
 
   await app.listen(port, '0.0.0.0');
 
-  console.log(`✅ Application running on: http://localhost:${port}/${apiPrefix}`);
+  console.log(
+    `✅ Application running on: http://localhost:${port}/${apiPrefix}`,
+  );
 }
 
 bootstrap().catch((err) => {

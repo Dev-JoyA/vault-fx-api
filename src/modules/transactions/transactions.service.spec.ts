@@ -44,7 +44,10 @@ describe('TransactionsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TransactionsService,
-        { provide: TransactionsRepository, useValue: mockTransactionsRepository },
+        {
+          provide: TransactionsRepository,
+          useValue: mockTransactionsRepository,
+        },
       ],
     }).compile();
 
@@ -53,9 +56,15 @@ describe('TransactionsService', () => {
 
   describe('getUserTransactions', () => {
     it('should return paginated transactions', async () => {
-      mockTransactionsRepository.findByUserWithFilters.mockResolvedValue([mockTransactions, 2]);
+      mockTransactionsRepository.findByUserWithFilters.mockResolvedValue([
+        mockTransactions,
+        2,
+      ]);
 
-      const result = await service.getUserTransactions('user-id', { page: 1, limit: 10 });
+      const result = await service.getUserTransactions('user-id', {
+        page: 1,
+        limit: 10,
+      });
 
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
@@ -66,16 +75,21 @@ describe('TransactionsService', () => {
         service.getUserTransactions('user-id', {
           fromDate: '2024-01-02',
           toDate: '2024-01-01',
-        })
+        }),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('getTransactionByReference', () => {
     it('should return transaction if found and belongs to user', async () => {
-      mockTransactionsRepository.findByReference.mockResolvedValue(mockTransactions[0]);
+      mockTransactionsRepository.findByReference.mockResolvedValue(
+        mockTransactions[0],
+      );
 
-      const result = await service.getTransactionByReference('user-id', 'REF123');
+      const result = await service.getTransactionByReference(
+        'user-id',
+        'REF123',
+      );
 
       expect(result).toBeDefined();
       expect(result.reference).toBe('REF123');
@@ -85,14 +99,16 @@ describe('TransactionsService', () => {
       mockTransactionsRepository.findByReference.mockResolvedValue(null);
 
       await expect(
-        service.getTransactionByReference('user-id', 'INVALID')
+        service.getTransactionByReference('user-id', 'INVALID'),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('getTransactionById', () => {
     it('should return transaction if found and belongs to user', async () => {
-      mockTransactionsRepository.findById.mockResolvedValue(mockTransactions[0]);
+      mockTransactionsRepository.findById.mockResolvedValue(
+        mockTransactions[0],
+      );
 
       const result = await service.getTransactionById('user-id', '1');
 
@@ -103,7 +119,9 @@ describe('TransactionsService', () => {
     it('should throw NotFoundException if transaction not found', async () => {
       mockTransactionsRepository.findById.mockResolvedValue(null);
 
-      await expect(service.getTransactionById('user-id', '999')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getTransactionById('user-id', '999'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -13,6 +18,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { User } from '../users/entities/user.entity';
+import { WalletsRepository } from '../wallets/wallets.repository';
 
 @Injectable()
 export class AuthService {
@@ -22,9 +28,14 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly walletsRepository: WalletsRepository,
   ) {}
 
-  async register(registerDto: RegisterDto, userAgent?: string, ipAddress?: string): Promise<{ message: string }> {
+  async register(
+    registerDto: RegisterDto,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<{ message: string }> {
     const { email, password } = registerDto;
 
     const existingUser = await this.usersRepository.findByEmail(email);
@@ -43,10 +54,17 @@ export class AuthService {
 
     await this.emailService.sendVerificationEmail(user.id, email);
 
-    await this.authRepository.recordLoginAttempt(email, true, user.id, ipAddress, userAgent);
+    await this.authRepository.recordLoginAttempt(
+      email,
+      true,
+      user.id,
+      ipAddress,
+      userAgent,
+    );
 
     return {
-      message: 'Registration successful. Please check your email for verification OTP.',
+      message:
+        'Registration successful. Please check your email for verification OTP.',
     };
   }
 
@@ -68,58 +86,111 @@ export class AuthService {
     }
 
     await this.usersRepository.verifyUser(user.id);
+
+    const existingWallet = await this.walletsRepository.findByUserAndCurrency(
+      user.id,
+      'NGN',
+    );
+    if (!existingWallet) {
+      const initialBalance =
+        this.configService.get<number>('wallet.initialBalance') ?? 1000;
+      await this.walletsRepository.create(user.id, 'NGN', initialBalance);
+    }
+
     await this.emailService.sendWelcomeEmail(email, email.split('@')[0]);
 
     return { message: 'Email verified successfully. You can now log in.' };
   }
 
   async resendVerificationOtp(email: string): Promise<{ message: string }> {
-  const user = await this.usersRepository.findByEmail(email);
-  if (!user) {
+    const user = await this.usersRepository.findByEmail(email);
+    if (!user) {
+      return {
+        message: 'If your email is registered, a new OTP has been sent.',
+      };
+    }
+
+    if (user.isVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    await this.emailService.resendVerificationOtp(user.id, email);
+
     return { message: 'If your email is registered, a new OTP has been sent.' };
   }
 
-  if (user.isVerified) {
-    throw new BadRequestException('Email already verified');
-  }
-
-  await this.emailService.resendVerificationOtp(user.id, email);
-
-  return { message: 'If your email is registered, a new OTP has been sent.' };
-}
-
-
-  async login(loginDto: LoginDto): Promise<{ accessToken: string; refreshToken: string; user: Partial<User> }> {
+  async login(loginDto: LoginDto): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: Partial<User>;
+  }> {
     const { email, password, userAgent, ipAddress } = loginDto;
 
-    const recentFailedAttempts = await this.authRepository.getRecentFailedAttempts(email, 15);
+    const recentFailedAttempts =
+      await this.authRepository.getRecentFailedAttempts(email, 15);
     if (recentFailedAttempts >= 5) {
-      throw new UnauthorizedException('Too many failed attempts. Please try again after 15 minutes.');
+      throw new UnauthorizedException(
+        'Too many failed attempts. Please try again after 15 minutes.',
+      );
     }
 
     const user = await this.usersRepository.findByEmail(email);
     if (!user) {
-      await this.authRepository.recordLoginAttempt(email, false, undefined, ipAddress, userAgent, 'User not found');
+      await this.authRepository.recordLoginAttempt(
+        email,
+        false,
+        undefined,
+        ipAddress,
+        userAgent,
+        'User not found',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.isVerified) {
-      await this.authRepository.recordLoginAttempt(email, false, user.id, ipAddress, userAgent, 'Email not verified');
-      throw new UnauthorizedException('Please verify your email before logging in');
+      await this.authRepository.recordLoginAttempt(
+        email,
+        false,
+        user.id,
+        ipAddress,
+        userAgent,
+        'Email not verified',
+      );
+      throw new UnauthorizedException(
+        'Please verify your email before logging in',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
-      await this.authRepository.recordLoginAttempt(email, false, user.id, ipAddress, userAgent, 'Invalid password');
+      await this.authRepository.recordLoginAttempt(
+        email,
+        false,
+        user.id,
+        ipAddress,
+        userAgent,
+        'Invalid password',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
     await this.authRepository.revokeAllUserTokens(user.id);
 
-    const tokens = await this.generateTokens(user.id, email, userAgent, ipAddress);
+    const tokens = await this.generateTokens(
+      user.id,
+      email,
+      userAgent,
+      ipAddress,
+    );
 
     await this.usersRepository.updateLastLogin(user.id);
-    await this.authRepository.recordLoginAttempt(email, true, user.id, ipAddress, userAgent);
+    await this.authRepository.recordLoginAttempt(
+      email,
+      true,
+      user.id,
+      ipAddress,
+      userAgent,
+    );
 
     const { passwordHash, ...userWithoutPassword } = user;
 
@@ -130,10 +201,15 @@ export class AuthService {
     };
   }
 
-  async refreshTokens(refreshTokenDto: RefreshTokenDto, userAgent?: string, ipAddress?: string): Promise<{ accessToken: string; refreshToken: string }> {
+  async refreshTokens(
+    refreshTokenDto: RefreshTokenDto,
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const { refreshToken } = refreshTokenDto;
 
-    const tokenEntity = await this.authRepository.findValidRefreshToken(refreshToken);
+    const tokenEntity =
+      await this.authRepository.findValidRefreshToken(refreshToken);
     if (!tokenEntity) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -150,9 +226,13 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(userId: string, refreshToken?: string): Promise<{ message: string }> {
+  async logout(
+    userId: string,
+    refreshToken?: string,
+  ): Promise<{ message: string }> {
     if (refreshToken) {
-      const tokenEntity = await this.authRepository.findValidRefreshToken(refreshToken);
+      const tokenEntity =
+        await this.authRepository.findValidRefreshToken(refreshToken);
       if (tokenEntity) {
         await this.authRepository.revokeRefreshToken(tokenEntity.id);
       }
@@ -163,20 +243,30 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+  async forgotPassword(
+    forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
     const { email } = forgotPasswordDto;
 
     const user = await this.usersRepository.findByEmail(email);
     if (!user) {
-      return { message: 'If a user with that email exists, a password reset OTP has been sent.' };
+      return {
+        message:
+          'If a user with that email exists, a password reset OTP has been sent.',
+      };
     }
 
     await this.emailService.sendPasswordResetEmail(user.id, email);
 
-    return { message: 'If a user with that email exists, a password reset OTP has been sent.' };
+    return {
+      message:
+        'If a user with that email exists, a password reset OTP has been sent.',
+    };
   }
 
-  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+  async resetPassword(
+    resetPasswordDto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
     const { email, otp, newPassword } = resetPasswordDto;
 
     const user = await this.usersRepository.findByEmail(email);
@@ -184,19 +274,25 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
-    const isValid = await this.emailService.verifyPasswordResetOtp(user.id, otp);
+    const isValid = await this.emailService.verifyPasswordResetOtp(
+      user.id,
+      otp,
+    );
     if (!isValid) {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
     const bcryptRounds = this.configService.get<number>('bcrypt.rounds') || 12;
     const passwordHash = await bcrypt.hash(newPassword, bcryptRounds);
-    
+
     await this.usersRepository.update(user.id, { passwordHash });
 
     await this.authRepository.revokeAllUserTokens(user.id);
 
-    return { message: 'Password reset successfully. You can now log in with your new password.' };
+    return {
+      message:
+        'Password reset successfully. You can now log in with your new password.',
+    };
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -224,9 +320,10 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     const refreshToken = uuidv4();
-    const refreshTokenExpiresIn = this.configService.get<string>('jwt.refreshExpiresIn') || '7d';
+    const refreshTokenExpiresIn =
+      this.configService.get<string>('jwt.refreshExpiresIn') || '7d';
     const expiresAt = new Date();
-    
+
     if (refreshTokenExpiresIn.endsWith('d')) {
       const days = parseInt(refreshTokenExpiresIn, 10);
       expiresAt.setDate(expiresAt.getDate() + days);

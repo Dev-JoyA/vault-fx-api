@@ -10,16 +10,23 @@ export class WalletsRepository {
     private readonly walletRepository: Repository<Wallet>,
   ) {}
 
-  async create(userId: string, currency: string): Promise<Wallet> {
+  async create(
+    userId: string,
+    currency: string,
+    initialBalance: number = 0,
+  ): Promise<Wallet> {
     const wallet = this.walletRepository.create({
       userId,
       currency,
-      balance: '0', 
+      balance: initialBalance.toString(),
     });
     return await this.walletRepository.save(wallet);
   }
 
-  async findByUserAndCurrency(userId: string, currency: string): Promise<Wallet | null> {
+  async findByUserAndCurrency(
+    userId: string,
+    currency: string,
+  ): Promise<Wallet | null> {
     return await this.walletRepository.findOne({
       where: { userId, currency, isActive: true },
     });
@@ -32,12 +39,14 @@ export class WalletsRepository {
   }
 
   async findById(id: string): Promise<Wallet | null> {
-    return await this.walletRepository.findOne({ where: { id, isActive: true } });
+    return await this.walletRepository.findOne({
+      where: { id, isActive: true },
+    });
   }
 
   async updateBalance(id: string, newBalance: number): Promise<void> {
-    await this.walletRepository.update(id, { 
-      balance: newBalance.toString() 
+    await this.walletRepository.update(id, {
+      balance: newBalance.toString(),
     });
   }
 

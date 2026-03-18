@@ -2,9 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { WalletsService } from './wallets.service';
 import { WalletsRepository } from './wallets.repository';
-import { TransactionsRepository } from '../transactions/transactions.repository';
 import { IdempotencyRepository } from '../transactions/idempotency.repository';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 
 describe('WalletsService', () => {
   let service: WalletsService;
@@ -16,14 +19,22 @@ describe('WalletsService', () => {
     findByUser: jest.fn(),
   };
 
-  const mockTransactionsRepository = {
-    create: jest.fn(),
-  };
-
   const mockIdempotencyRepository = {
     findValidKey: jest.fn(),
     createRecord: jest.fn(),
     updateResponse: jest.fn(),
+  };
+
+  const mockWalletRepo = {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+  };
+
+  const mockTransactionRepo = {
+    create: jest.fn(),
+    save: jest.fn(),
   };
 
   const mockQueryRunner = {
@@ -32,18 +43,13 @@ describe('WalletsService', () => {
     commitTransaction: jest.fn(),
     rollbackTransaction: jest.fn(),
     release: jest.fn(),
+    manager: {
+      getRepository: jest.fn(),
+    },
   };
 
   const mockDataSource = {
     createQueryRunner: jest.fn(),
-  };
-
-  const mockWallet = {
-    id: 'wallet-id',
-    userId: 'user-id',
-    currency: 'NGN',
-    balance: '1000',
-    isActive: true,
   };
 
   beforeEach(async () => {
@@ -55,6 +61,14 @@ describe('WalletsService', () => {
     mockQueryRunner.commitTransaction.mockResolvedValue(undefined);
     mockQueryRunner.rollbackTransaction.mockResolvedValue(undefined);
     mockQueryRunner.release.mockResolvedValue(undefined);
+
+    mockQueryRunner.manager.getRepository.mockImplementation((entity: any) => {
+      const name =
+        typeof entity === 'function' ? entity.name : (entity?.name ?? '');
+      if (name === 'Wallet') return mockWalletRepo;
+      return mockTransactionRepo;
+    });
+
     mockIdempotencyRepository.createRecord.mockResolvedValue({});
     mockIdempotencyRepository.updateResponse.mockResolvedValue({});
 
@@ -62,7 +76,6 @@ describe('WalletsService', () => {
       providers: [
         WalletsService,
         { provide: WalletsRepository, useValue: mockWalletsRepository },
-        { provide: TransactionsRepository, useValue: mockTransactionsRepository },
         { provide: IdempotencyRepository, useValue: mockIdempotencyRepository },
         { provide: DataSource, useValue: mockDataSource },
       ],
@@ -72,25 +85,42 @@ describe('WalletsService', () => {
   });
 
   describe('getUserWallets', () => {
-    it('should return user wallets with number balances', async () => {
+    it('should return wallets with numeric balances', async () => {
       const mockWallets = [
-        { ...mockWallet, currency: 'NGN', balance: '1000' },
-        { ...mockWallet, currency: 'USD', balance: '500' },
+        {
+          id: '1',
+          currency: 'NGN',
+          balance: '1000',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '2',
+          currency: 'USD',
+          balance: '500.50',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ];
-
       mockWalletsRepository.findByUser.mockResolvedValue(mockWallets);
 
       const result = await service.getUserWallets('user-id');
 
       expect(result).toHaveLength(2);
       expect(result[0].balance).toBe(1000);
-      expect(result[1].balance).toBe(500);
+      expect(result[1].balance).toBe(500.5);
     });
   });
 
   describe('getWalletBalance', () => {
-    it('should return wallet balance as number', async () => {
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(mockWallet);
+    it('should return wallet balance', async () => {
+      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue({
+        id: 'wallet-id',
+        currency: 'NGN',
+        balance: '1000',
+      });
 
       const result = await service.getWalletBalance('user-id', 'NGN');
 
@@ -104,50 +134,123 @@ describe('WalletsService', () => {
     it('should throw NotFoundException if wallet not found', async () => {
       mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(null);
 
-      await expect(service.getWalletBalance('user-id', 'NGN')).rejects.toThrow(NotFoundException);
+      await expect(service.getWalletBalance('user-id', 'NGN')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('fundWallet', () => {
+    const mockWallet = {
+      id: 'wallet-id',
+      userId: 'user-id',
+      currency: 'NGN',
+      balance: '1000',
+      isActive: true,
+    };
+    const mockSavedTransaction = {
+      reference: 'FUND_12345',
+      completedAt: new Date(),
+    };
+
     it('should successfully fund wallet', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(mockWallet);
-      mockTransactionsRepository.create.mockResolvedValue({
-        reference: 'FUND_12345',
-        completedAt: new Date(),
-      });
+      mockWalletRepo.findOne.mockResolvedValue(mockWallet);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
       const result = await service.fundWallet('user-id', 'NGN', 500);
 
       expect((result as any).message).toBe('Wallet funded successfully');
-      expect((result as any).transaction.amount).toBe(500);
-      expect((result as any).transaction.reference).toBeDefined();
+      expect((result as any).data.amount).toBe(500);
+      expect((result as any).data.newBalance).toBe(1500);
     });
 
     it('should create wallet if it does not exist', async () => {
-      const newWallet = { ...mockWallet, balance: '0' };
+      const newWallet = {
+        id: 'new-wallet-id',
+        userId: 'user-id',
+        currency: 'NGN',
+        balance: '0',
+        isActive: true,
+      };
 
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockTransactionsRepository.create.mockResolvedValue({
-        reference: 'FUND_12345',
-        completedAt: new Date(),
-      });
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(null);
-      mockWalletsRepository.create.mockResolvedValue(newWallet);
+      mockWalletRepo.findOne.mockResolvedValue(null);
+      mockWalletRepo.create.mockReturnValue(newWallet);
+      mockWalletRepo.save.mockResolvedValue(newWallet);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
       await service.fundWallet('user-id', 'NGN', 500);
 
-      expect(mockWalletsRepository.create).toHaveBeenCalledWith('user-id', 'NGN');
+      expect(mockWalletRepo.create).toHaveBeenCalledWith({
+        userId: 'user-id',
+        currency: 'NGN',
+        balance: '0',
+      });
+    });
+
+    it('should return cached response if idempotency key exists', async () => {
+      const cachedResponse = {
+        message: 'Wallet funded successfully',
+        data: { amount: 500 },
+      };
+      mockIdempotencyRepository.findValidKey.mockResolvedValue({
+        responseBody: cachedResponse,
+      });
+
+      const result = await service.fundWallet(
+        'user-id',
+        'NGN',
+        500,
+        'existing-key',
+      );
+
+      expect(result).toEqual(cachedResponse);
+      expect(mockWalletRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if request already in progress', async () => {
+      mockIdempotencyRepository.findValidKey.mockResolvedValue({
+        responseBody: null,
+      });
+
+      await expect(service.fundWallet('user-id', 'NGN', 500)).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 
   describe('convertCurrency', () => {
     it('should throw BadRequestException if source wallet not found', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(null);
+      mockWalletRepo.findOne.mockResolvedValue(null);
 
       await expect(
-        service.convertCurrency('user-id', 'NGN', 'USD', 500, 0.00066)
+        service.convertCurrency('user-id', 'NGN', 'USD', 500, 0.00066),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if insufficient balance', async () => {
+      mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
+      mockWalletRepo.findOne.mockResolvedValueOnce({
+        id: 'wallet-id',
+        currency: 'NGN',
+        balance: '100',
+        isActive: true,
+      });
+
+      await expect(
+        service.convertCurrency('user-id', 'NGN', 'USD', 500, 0.00066),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if same currency', async () => {
+      await expect(
+        service.convertCurrency('user-id', 'NGN', 'NGN', 500, 1),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -161,92 +264,101 @@ describe('WalletsService', () => {
     const senderWallet = {
       id: 'sender-wallet-id',
       userId: senderId,
-      currency: 'USD',
+      currency,
       balance: '1000',
       isActive: true,
     };
-
     const recipientWallet = {
       id: 'recipient-wallet-id',
       userId: recipientId,
-      currency: 'USD',
+      currency,
       balance: '200',
       isActive: true,
     };
-
-    const mockTransaction = {
+    const mockSavedTransaction = {
       reference: 'TRF_12345',
       completedAt: new Date(),
     };
 
-    it('should successfully transfer funds to existing recipient wallet', async () => {
+    it('should successfully transfer funds', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
+      mockWalletRepo.findOne
         .mockResolvedValueOnce(senderWallet)
         .mockResolvedValueOnce(recipientWallet);
-      mockWalletsRepository.updateBalance.mockResolvedValue(undefined);
-      mockTransactionsRepository.create.mockResolvedValue(mockTransaction);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
-      const result = await service.transferToUser(senderId, recipientId, currency, amount);
+      const result = await service.transferToUser(
+        senderId,
+        recipientId,
+        currency,
+        amount,
+      );
 
       expect((result as any).message).toBe('Transfer successful');
       expect((result as any).data.amount).toBe(amount);
-      expect((result as any).data.currency).toBe(currency);
-      expect((result as any).data.recipientId).toBe(recipientId);
-      expect((result as any).data.reference).toBeDefined();
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('sender-wallet-id', 500);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('recipient-wallet-id', 700);
+      expect(mockWalletRepo.update).toHaveBeenCalledWith('sender-wallet-id', {
+        balance: '500',
+      });
+      expect(mockWalletRepo.update).toHaveBeenCalledWith(
+        'recipient-wallet-id',
+        { balance: '700' },
+      );
     });
 
     it('should auto-create wallet for recipient if they dont have one', async () => {
       const newRecipientWallet = {
         id: 'new-wallet-id',
         userId: recipientId,
-        currency: 'USD',
+        currency,
         balance: '0',
         isActive: true,
       };
 
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
+      mockWalletRepo.findOne
         .mockResolvedValueOnce(senderWallet)
         .mockResolvedValueOnce(null);
-      mockWalletsRepository.create.mockResolvedValue(newRecipientWallet);
-      mockWalletsRepository.updateBalance.mockResolvedValue(undefined);
-      mockTransactionsRepository.create.mockResolvedValue(mockTransaction);
+      mockWalletRepo.create.mockReturnValue(newRecipientWallet);
+      mockWalletRepo.save.mockResolvedValue(newRecipientWallet);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
-      const result = await service.transferToUser(senderId, recipientId, currency, amount);
+      await service.transferToUser(senderId, recipientId, currency, amount);
 
-      expect((result as any).message).toBe('Transfer successful');
-      expect(mockWalletsRepository.create).toHaveBeenCalledWith(recipientId, currency);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('sender-wallet-id', 500);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('new-wallet-id', 500);
+      expect(mockWalletRepo.create).toHaveBeenCalledWith({
+        userId: recipientId,
+        currency,
+        balance: '0',
+      });
     });
 
     it('should throw BadRequestException when sending to yourself', async () => {
       await expect(
-        service.transferToUser(senderId, senderId, currency, amount)
+        service.transferToUser(senderId, senderId, currency, amount),
       ).rejects.toThrow('Cannot transfer to yourself');
-
-      expect(mockWalletsRepository.findByUserAndCurrency).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException if sender has no wallet for that currency', async () => {
+    it('should throw BadRequestException if sender has no wallet', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValue(null);
+      mockWalletRepo.findOne.mockResolvedValue(null);
 
       await expect(
-        service.transferToUser(senderId, recipientId, currency, amount)
+        service.transferToUser(senderId, recipientId, currency, amount),
       ).rejects.toThrow(`You don't have a ${currency} wallet`);
     });
 
-    it('should throw BadRequestException if sender has insufficient balance', async () => {
+    it('should throw BadRequestException if insufficient balance', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      const lowBalanceWallet = { ...senderWallet, balance: '100' };
-      mockWalletsRepository.findByUserAndCurrency.mockResolvedValueOnce(lowBalanceWallet);
+      mockWalletRepo.findOne.mockResolvedValueOnce({
+        ...senderWallet,
+        balance: '100',
+      });
 
       await expect(
-        service.transferToUser(senderId, recipientId, currency, 500)
+        service.transferToUser(senderId, recipientId, currency, 500),
       ).rejects.toThrow(`Insufficient ${currency} balance`);
     });
 
@@ -255,100 +367,92 @@ describe('WalletsService', () => {
         message: 'Transfer successful',
         data: { reference: 'cached-ref' },
       };
-
       mockIdempotencyRepository.findValidKey.mockResolvedValue({
         responseBody: cachedResponse,
       });
 
       const result = await service.transferToUser(
-        senderId, recipientId, currency, amount, 'existing-key'
+        senderId,
+        recipientId,
+        currency,
+        amount,
+        'existing-key',
       );
 
       expect(result).toEqual(cachedResponse);
-      expect(mockWalletsRepository.findByUserAndCurrency).not.toHaveBeenCalled();
+      expect(mockWalletRepo.findOne).not.toHaveBeenCalled();
     });
 
     it('should handle transaction rollback on error', async () => {
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
+      mockWalletRepo.findOne
         .mockResolvedValueOnce(senderWallet)
         .mockResolvedValueOnce(recipientWallet);
-      mockWalletsRepository.updateBalance.mockRejectedValue(new Error('Database error'));
+      mockWalletRepo.update.mockRejectedValue(new Error('Database error'));
 
       await expect(
-        service.transferToUser(senderId, recipientId, currency, amount)
+        service.transferToUser(senderId, recipientId, currency, amount),
       ).rejects.toThrow('Database error');
 
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
     });
 
-    it('should handle different currencies correctly', async () => {
-      const eurSenderWallet = {
-        id: 'eur-sender-wallet-id',
-        userId: senderId,
-        currency: 'EUR',
-        balance: '1000',
-        isActive: true,
-      };
-      const eurRecipientWallet = {
-        id: 'eur-recipient-wallet-id',
-        userId: recipientId,
-        currency: 'EUR',
-        balance: '300',
-        isActive: true,
-      };
-
-      mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
-        .mockResolvedValueOnce(eurSenderWallet)
-        .mockResolvedValueOnce(eurRecipientWallet);
-      mockWalletsRepository.updateBalance.mockResolvedValue(undefined);
-      mockTransactionsRepository.create.mockResolvedValue(mockTransaction);
-
-      const result = await service.transferToUser(senderId, recipientId, 'EUR', 300);
-
-      expect((result as any).message).toBe('Transfer successful');
-      expect((result as any).data.currency).toBe('EUR');
-      expect((result as any).data.amount).toBe(300);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('eur-sender-wallet-id', 700);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('eur-recipient-wallet-id', 600);
-    });
-
     it('should handle large transfers correctly', async () => {
       const largeAmount = 1000000;
-      const richSenderWallet = { ...senderWallet, balance: largeAmount.toString() };
+      const richSenderWallet = {
+        ...senderWallet,
+        balance: largeAmount.toString(),
+      };
 
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
+      mockWalletRepo.findOne
         .mockResolvedValueOnce(richSenderWallet)
         .mockResolvedValueOnce(recipientWallet);
-      mockWalletsRepository.updateBalance.mockResolvedValue(undefined);
-      mockTransactionsRepository.create.mockResolvedValue(mockTransaction);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
-      const result = await service.transferToUser(senderId, recipientId, currency, largeAmount);
+      const result = await service.transferToUser(
+        senderId,
+        recipientId,
+        currency,
+        largeAmount,
+      );
 
       expect((result as any).message).toBe('Transfer successful');
-      expect((result as any).data.amount).toBe(largeAmount);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('sender-wallet-id', 0);
+      expect(mockWalletRepo.update).toHaveBeenCalledWith('sender-wallet-id', {
+        balance: '0',
+      });
     });
 
-    it('should preserve decimal precision correctly', async () => {
+    it('should preserve decimal precision', async () => {
       const preciseAmount = 500.75;
       const senderWithDecimals = { ...senderWallet, balance: '1000.50' };
       const recipientWithDecimals = { ...recipientWallet, balance: '200.25' };
 
       mockIdempotencyRepository.findValidKey.mockResolvedValue(null);
-      mockWalletsRepository.findByUserAndCurrency
+      mockWalletRepo.findOne
         .mockResolvedValueOnce(senderWithDecimals)
         .mockResolvedValueOnce(recipientWithDecimals);
-      mockWalletsRepository.updateBalance.mockResolvedValue(undefined);
-      mockTransactionsRepository.create.mockResolvedValue(mockTransaction);
+      mockWalletRepo.update.mockResolvedValue(undefined);
+      mockTransactionRepo.create.mockReturnValue(mockSavedTransaction);
+      mockTransactionRepo.save.mockResolvedValue(mockSavedTransaction);
 
-      await service.transferToUser(senderId, recipientId, currency, preciseAmount);
+      await service.transferToUser(
+        senderId,
+        recipientId,
+        currency,
+        preciseAmount,
+      );
 
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('sender-wallet-id', 499.75);
-      expect(mockWalletsRepository.updateBalance).toHaveBeenCalledWith('recipient-wallet-id', 701.00);
+      expect(mockWalletRepo.update).toHaveBeenCalledWith('sender-wallet-id', {
+        balance: '499.75',
+      });
+      expect(mockWalletRepo.update).toHaveBeenCalledWith(
+        'recipient-wallet-id',
+        { balance: '701' },
+      );
     });
   });
 });

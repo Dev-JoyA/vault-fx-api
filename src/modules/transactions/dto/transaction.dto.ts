@@ -1,6 +1,9 @@
 import { IsOptional, IsInt, Min, Max, IsString, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TransactionType, TransactionStatus } from '../entities/transaction.entity';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../entities/transaction.entity';
 
 export class TransactionQueryDto {
   @IsOptional()
