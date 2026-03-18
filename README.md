@@ -1,5 +1,3 @@
-The README has setup instructions, key assumptions, API documentation, and architectural decisions — but it's missing the flow diagrams. Here's the updated README with everything:
-
 ````markdown
 # Vault FX API
 
